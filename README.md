@@ -4,7 +4,7 @@ A metadata-driven PBIP/PBIR Power BI template — same workflow as
 `powerbi-pipeline-sla-template`, applied to a Revenue Tracker product for the Gumroad
 template roadmap.
 
-## Workflow (mirrors powerbi-pipeline-sla-template)
+## Workflow 
 
 ```
 template/ (checked-in TMDL/PBIR skeleton, no measures baked in)
