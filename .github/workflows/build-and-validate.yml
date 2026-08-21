@@ -15,8 +15,6 @@ on:
 
 jobs:
   build-and-validate:
-    # Windows runner to match Pavithra's local PowerShell 7 (pwsh) environment and avoid
-    # the PowerShell 5.1 vs pwsh encoding/behavior drift that bit the SLA project.
     runs-on: windows-latest
 
     env:
@@ -60,14 +58,25 @@ jobs:
         shell: pwsh
         run: .\scripts\Assert-PbirPageLayoutGate.ps1 -GeneratedRoot "$env:OUTPUT_ROOT"
 
+      - name: Gate — assemble three artifacts for Desktop
+        shell: pwsh
+        run: |
+          .\scripts\Prepare-DesktopArtifact.ps1 `
+            -GeneratedRoot "$env:OUTPUT_ROOT" `
+            -AssemblyRoot "$env:OUTPUT_ROOT\RevenueTracker.Desktop"
+
+      - name: Upload assembled RevenueTracker Desktop project
+        uses: actions/upload-artifact@v4
+        with:
+          name: RevenueTracker.Desktop
+          path: ${{ github.workspace }}\generated\RevenueTracker.Desktop
+          include-hidden-files: true
+
       - name: Upload RevenueTracker.Report artifact
         uses: actions/upload-artifact@v4
         with:
           name: RevenueTracker.Report
           path: ${{ github.workspace }}\generated\RevenueTracker.Report
-          # include-hidden-files defaults to false in actions/upload-artifact@v4, which
-          # silently strips .platform (a dotfile) — the exact bug that broke the SLA
-          # project's uploaded artifacts. Do not remove this.
           include-hidden-files: true
 
       - name: Upload RevenueTracker.SemanticModel artifact
@@ -83,8 +92,6 @@ jobs:
           name: RevenueTracker.pbip
           path: ${{ github.workspace }}\generated\RevenueTracker.pbip
 
-  # NOTE, carried over from the SLA project's hard-learned lesson:
-  # A green run of this workflow proves the generated artifacts are structurally valid
-  # (TMDL parses, measures match the catalog, page/visual manifests are internally
-  # consistent). It does NOT prove the .pbip opens and renders cleanly in Power BI
-  # Desktop. Do a manual Desktop UAT pass before treating a release as shippable.
+  # The three source artifacts remain available individually, while the assembled
+  # Desktop artifact is the authoritative UAT package. The assembly gate verifies
+  # the relative PBIP -> Report -> SemanticModel paths and the required definition.pbism.
