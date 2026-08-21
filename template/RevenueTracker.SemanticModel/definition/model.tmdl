@@ -1,0 +1,18 @@
+model Model
+	culture: en-IN
+	defaultPowerBIDataSourceVersion: powerBI_V3
+	sourceQueryCulture: en-IN
+	dataAccessOptions
+		legacyRedirects
+		returnErrorValuesAsNull
+
+	annotation PBI_QueryOrder = ["Fact_Revenue","Dim_Date","Dim_Product","Dim_Channel","Dim_Target","Dim_MonthYear"]
+
+	annotation __PBI_TimeIntelligenceEnabled = 1
+
+ref table Fact_Revenue
+ref table Dim_Date
+ref table Dim_Product
+ref table Dim_Channel
+ref table Dim_Target
+ref table Dim_MonthYear

@@ -1,0 +1,102 @@
+name: DesktopValidation-PBIP
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "template/**"
+      - "data/**"
+      - "src/**"
+      - "scripts/**"
+      - ".github/workflows/build-and-validate.yml"
+  pull_request:
+    branches: [main]
+  workflow_dispatch: {}
+
+jobs:
+  build-and-validate:
+    # Windows runner to match Pavithra's local PowerShell 7 (pwsh) environment and avoid
+    # the PowerShell 5.1 vs pwsh encoding/behavior drift that bit the SLA project.
+    runs-on: windows-latest
+
+    env:
+      TEMPLATE_ROOT: ${{ github.workspace }}\template
+      DATA_ROOT: ${{ github.workspace }}\data
+      OUTPUT_ROOT: ${{ github.workspace }}\generated
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Restore orchestrator
+        shell: pwsh
+        run: dotnet restore src/RevenueTemplateOrchestrator/RevenueTemplateOrchestrator.csproj
+        # $LASTEXITCODE is checked on the very next line, nothing in between — this is
+        # the fix for the pitfall documented in Program.cs / the SLA runbook.
+
+      - name: Check restore exit code
+        shell: pwsh
+        run: |
+          if ($LASTEXITCODE -ne 0) { throw "dotnet restore failed with exit code $LASTEXITCODE" }
+
+      - name: Build orchestrator
+        shell: pwsh
+        run: dotnet build src/RevenueTemplateOrchestrator/RevenueTemplateOrchestrator.csproj -c Release --no-restore
+
+      - name: Check build exit code
+        shell: pwsh
+        run: |
+          if ($LASTEXITCODE -ne 0) { throw "dotnet build failed with exit code $LASTEXITCODE" }
+
+      - name: Run orchestrator (generate PBIP artifacts)
+        shell: pwsh
+        run: |
+          dotnet run --project src/RevenueTemplateOrchestrator/RevenueTemplateOrchestrator.csproj -c Release --no-build -- `
+            "$env:TEMPLATE_ROOT" "$env:DATA_ROOT" "$env:OUTPUT_ROOT"
+
+      - name: Check orchestrator exit code
+        shell: pwsh
+        run: |
+          if ($LASTEXITCODE -ne 0) { throw "Orchestrator failed with exit code $LASTEXITCODE" }
+
+      - name: Gate — measure expression parity
+        shell: pwsh
+        run: .\scripts\Assert-MeasureExpressionParity.ps1 -GeneratedRoot "$env:OUTPUT_ROOT"
+
+      - name: Gate — PBIR page/layout contract
+        shell: pwsh
+        run: .\scripts\Assert-PbirPageLayoutGate.ps1 -GeneratedRoot "$env:OUTPUT_ROOT"
+
+      - name: Upload RevenueTracker.Report artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: RevenueTracker.Report
+          path: ${{ github.workspace }}\generated\RevenueTracker.Report
+          # include-hidden-files defaults to false in actions/upload-artifact@v4, which
+          # silently strips .platform (a dotfile) — the exact bug that broke the SLA
+          # project's uploaded artifacts. Do not remove this.
+          include-hidden-files: true
+
+      - name: Upload RevenueTracker.SemanticModel artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: RevenueTracker.SemanticModel
+          path: ${{ github.workspace }}\generated\RevenueTracker.SemanticModel
+          include-hidden-files: true
+
+      - name: Upload .pbip project file
+        uses: actions/upload-artifact@v4
+        with:
+          name: RevenueTracker.pbip
+          path: ${{ github.workspace }}\generated\RevenueTracker.pbip
+
+  # NOTE, carried over from the SLA project's hard-learned lesson:
+  # A green run of this workflow proves the generated artifacts are structurally valid
+  # (TMDL parses, measures match the catalog, page/visual manifests are internally
+  # consistent). It does NOT prove the .pbip opens and renders cleanly in Power BI
+  # Desktop. Do a manual Desktop UAT pass before treating a release as shippable.

@@ -1,0 +1,47 @@
+table Dim_Product
+	lineageTag = dim-product-table-001
+
+	column ProductID
+		dataType: string
+		lineageTag = dim-product-col-productid
+		summarizeBy: none
+		sourceColumn: ProductID
+
+		annotation SummarizationSetBy = Automatic
+
+	column ProductName
+		dataType: string
+		lineageTag = dim-product-col-productname
+		summarizeBy: none
+		sourceColumn: ProductName
+
+		annotation SummarizationSetBy = Automatic
+
+	column Category
+		dataType: string
+		lineageTag = dim-product-col-category
+		summarizeBy: none
+		sourceColumn: Category
+
+		annotation SummarizationSetBy = Automatic
+
+	column LaunchDate
+		dataType: dateTime
+		lineageTag = dim-product-col-launchdate
+		summarizeBy: none
+		sourceColumn: LaunchDate
+
+		annotation SummarizationSetBy = Automatic
+		annotation UnderlyingDateTimeDataType = Date
+
+	partition Dim_Product = m
+		mode: import
+		source =
+				let
+				    Source = Csv.Document(File.Contents("Dim_Product.csv"),[Delimiter=",", Columns=4, Encoding=65001, QuoteStyle=QuoteStyle.None]),
+				    #"Promoted Headers" = Table.PromoteHeaders(Source, [PromoteAllScalars=true]),
+				    #"Changed Type" = Table.TransformColumnTypes(#"Promoted Headers",{{"ProductID", type text}, {"ProductName", type text}, {"Category", type text}, {"LaunchDate", type date}})
+				in
+				    #"Changed Type"
+
+	annotation PBI_ResultType = Table

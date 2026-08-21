@@ -1,0 +1,92 @@
+table Fact_Revenue
+	lineageTag = fact-revenue-table-001
+
+	column TransactionID
+		dataType: string
+		lineageTag = fact-revenue-col-txnid
+		summarizeBy: none
+		sourceColumn: TransactionID
+
+		annotation SummarizationSetBy = Automatic
+
+	column Date
+		dataType: dateTime
+		lineageTag = fact-revenue-col-date
+		summarizeBy: none
+		sourceColumn: Date
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation UnderlyingDateTimeDataType = Date
+
+	column ProductID
+		dataType: string
+		lineageTag = fact-revenue-col-productid
+		summarizeBy: none
+		sourceColumn: ProductID
+
+		annotation SummarizationSetBy = Automatic
+
+	column ChannelID
+		dataType: string
+		lineageTag = fact-revenue-col-channelid
+		summarizeBy: none
+		sourceColumn: ChannelID
+
+		annotation SummarizationSetBy = Automatic
+
+	column Quantity
+		dataType: int64
+		lineageTag = fact-revenue-col-quantity
+		summarizeBy: sum
+		sourceColumn: Quantity
+
+		annotation SummarizationSetBy = Automatic
+
+	column UnitPrice
+		dataType: double
+		lineageTag = fact-revenue-col-unitprice
+		summarizeBy: sum
+		sourceColumn: UnitPrice
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-IN"}
+
+	column Revenue
+		dataType: double
+		lineageTag = fact-revenue-col-revenue
+		summarizeBy: sum
+		sourceColumn: Revenue
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-IN"}
+
+	column IsRefund
+		dataType: int64
+		lineageTag = fact-revenue-col-isrefund
+		summarizeBy: sum
+		sourceColumn: IsRefund
+
+		annotation SummarizationSetBy = Automatic
+
+	column Currency
+		dataType: string
+		lineageTag = fact-revenue-col-currency
+		summarizeBy: none
+		sourceColumn: Currency
+
+		annotation SummarizationSetBy = Automatic
+
+	partition Fact_Revenue = m
+		mode: import
+		source =
+				let
+				    Source = Csv.Document(File.Contents("Fact_Revenue_SampleData.csv"),[Delimiter=",", Columns=9, Encoding=65001, QuoteStyle=QuoteStyle.None]),
+				    #"Promoted Headers" = Table.PromoteHeaders(Source, [PromoteAllScalars=true]),
+				    #"Changed Type" = Table.TransformColumnTypes(#"Promoted Headers",{{"TransactionID", type text}, {"Date", type date}, {"ProductID", type text}, {"ChannelID", type text}, {"Quantity", Int64.Type}, {"UnitPrice", type number}, {"Revenue", type number}, {"IsRefund", Int64.Type}, {"Currency", type text}})
+				in
+				    #"Changed Type"
+
+	annotation PBI_ResultType = Table

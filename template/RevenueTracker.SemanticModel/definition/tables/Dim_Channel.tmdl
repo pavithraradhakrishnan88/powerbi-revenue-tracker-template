@@ -1,0 +1,30 @@
+table Dim_Channel
+	lineageTag = dim-channel-table-001
+
+	column ChannelID
+		dataType: string
+		lineageTag = dim-channel-col-channelid
+		summarizeBy: none
+		sourceColumn: ChannelID
+
+		annotation SummarizationSetBy = Automatic
+
+	column ChannelName
+		dataType: string
+		lineageTag = dim-channel-col-channelname
+		summarizeBy: none
+		sourceColumn: ChannelName
+
+		annotation SummarizationSetBy = Automatic
+
+	partition Dim_Channel = m
+		mode: import
+		source =
+				let
+				    Source = Csv.Document(File.Contents("Dim_Channel.csv"),[Delimiter=",", Columns=2, Encoding=65001, QuoteStyle=QuoteStyle.None]),
+				    #"Promoted Headers" = Table.PromoteHeaders(Source, [PromoteAllScalars=true]),
+				    #"Changed Type" = Table.TransformColumnTypes(#"Promoted Headers",{{"ChannelID", type text}, {"ChannelName", type text}})
+				in
+				    #"Changed Type"
+
+	annotation PBI_ResultType = Table

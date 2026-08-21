@@ -1,0 +1,24 @@
+table Dim_MonthYear
+	lineageTag = dim-monthyear-table-001
+	isHidden
+
+	column MonthYear
+		dataType: string
+		lineageTag = dim-monthyear-col-monthyear
+		summarizeBy: none
+		sourceColumn: MonthYear
+		isKey
+
+		annotation SummarizationSetBy = Automatic
+
+	partition Dim_MonthYear = m
+		mode: import
+		source =
+				let
+				    Source = Csv.Document(File.Contents("Dim_MonthYear.csv"),[Delimiter=",", Columns=1, Encoding=65001, QuoteStyle=QuoteStyle.None]),
+				    #"Promoted Headers" = Table.PromoteHeaders(Source, [PromoteAllScalars=true]),
+				    #"Changed Type" = Table.TransformColumnTypes(#"Promoted Headers",{{"MonthYear", type text}})
+				in
+				    #"Changed Type"
+
+	annotation PBI_ResultType = Table

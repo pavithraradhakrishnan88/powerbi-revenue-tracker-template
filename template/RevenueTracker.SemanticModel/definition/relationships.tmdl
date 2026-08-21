@@ -1,0 +1,23 @@
+relationship rel-fact-date
+	fromColumn: Fact_Revenue.Date
+	toColumn: Dim_Date.Date
+
+relationship rel-fact-product
+	fromColumn: Fact_Revenue.ProductID
+	toColumn: Dim_Product.ProductID
+
+relationship rel-fact-channel
+	fromColumn: Fact_Revenue.ChannelID
+	toColumn: Dim_Channel.ChannelID
+
+relationship rel-target-product
+	fromColumn: Dim_Target.ProductID
+	toColumn: Dim_Product.ProductID
+
+relationship rel-date-monthyear
+	fromColumn: Dim_Date.MonthYear
+	toColumn: Dim_MonthYear.MonthYear
+
+relationship rel-target-monthyear
+	fromColumn: Dim_Target.MonthYear
+	toColumn: Dim_MonthYear.MonthYear

@@ -1,0 +1,39 @@
+table Dim_Target
+	lineageTag = dim-target-table-001
+
+	column MonthYear
+		dataType: string
+		lineageTag = dim-target-col-monthyear
+		summarizeBy: none
+		sourceColumn: MonthYear
+
+		annotation SummarizationSetBy = Automatic
+
+	column ProductID
+		dataType: string
+		lineageTag = dim-target-col-productid
+		summarizeBy: none
+		sourceColumn: ProductID
+
+		annotation SummarizationSetBy = Automatic
+
+	column TargetRevenue
+		dataType: double
+		lineageTag = dim-target-col-targetrevenue
+		summarizeBy: sum
+		sourceColumn: TargetRevenue
+
+		annotation SummarizationSetBy = Automatic
+		annotation PBI_FormatHint = {"currencyCulture":"en-IN"}
+
+	partition Dim_Target = m
+		mode: import
+		source =
+				let
+				    Source = Csv.Document(File.Contents("Dim_Target.csv"),[Delimiter=",", Columns=3, Encoding=65001, QuoteStyle=QuoteStyle.None]),
+				    #"Promoted Headers" = Table.PromoteHeaders(Source, [PromoteAllScalars=true]),
+				    #"Changed Type" = Table.TransformColumnTypes(#"Promoted Headers",{{"MonthYear", type text}, {"ProductID", type text}, {"TargetRevenue", type number}})
+				in
+				    #"Changed Type"
+
+	annotation PBI_ResultType = Table

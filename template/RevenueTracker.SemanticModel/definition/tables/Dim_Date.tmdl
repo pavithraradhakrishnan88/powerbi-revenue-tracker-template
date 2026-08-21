@@ -1,0 +1,80 @@
+table Dim_Date
+	lineageTag = dim-date-table-001
+
+	column Date
+		dataType: dateTime
+		lineageTag = dim-date-col-date
+		summarizeBy: none
+		sourceColumn: Date
+
+		annotation SummarizationSetBy = Automatic
+		annotation UnderlyingDateTimeDataType = Date
+
+	column Year
+		dataType: int64
+		lineageTag = dim-date-col-year
+		summarizeBy: none
+		sourceColumn: Year
+
+		annotation SummarizationSetBy = Automatic
+
+	column Quarter
+		dataType: string
+		lineageTag = dim-date-col-quarter
+		summarizeBy: none
+		sourceColumn: Quarter
+
+		annotation SummarizationSetBy = Automatic
+
+	column Month
+		dataType: int64
+		lineageTag = dim-date-col-month
+		summarizeBy: none
+		sourceColumn: Month
+
+		annotation SummarizationSetBy = Automatic
+
+	column MonthName
+		dataType: string
+		lineageTag = dim-date-col-monthname
+		summarizeBy: none
+		sourceColumn: MonthName
+		sortByColumn: Month
+
+		annotation SummarizationSetBy = Automatic
+
+	column MonthYear
+		dataType: string
+		lineageTag = dim-date-col-monthyear
+		summarizeBy: none
+		sourceColumn: MonthYear
+
+		annotation SummarizationSetBy = Automatic
+
+	column Week
+		dataType: int64
+		lineageTag = dim-date-col-week
+		summarizeBy: none
+		sourceColumn: Week
+
+		annotation SummarizationSetBy = Automatic
+
+	column DayOfWeek
+		dataType: string
+		lineageTag = dim-date-col-dayofweek
+		summarizeBy: none
+		sourceColumn: DayOfWeek
+
+		annotation SummarizationSetBy = Automatic
+
+	partition Dim_Date = m
+		mode: import
+		source =
+				let
+				    Source = Csv.Document(File.Contents("Dim_Date.csv"),[Delimiter=",", Columns=8, Encoding=65001, QuoteStyle=QuoteStyle.None]),
+				    #"Promoted Headers" = Table.PromoteHeaders(Source, [PromoteAllScalars=true]),
+				    #"Changed Type" = Table.TransformColumnTypes(#"Promoted Headers",{{"Date", type date}, {"Year", Int64.Type}, {"Quarter", type text}, {"Month", Int64.Type}, {"MonthName", type text}, {"MonthYear", type text}, {"Week", Int64.Type}, {"DayOfWeek", type text}})
+				in
+				    #"Changed Type"
+
+	annotation PBI_ResultType = Table

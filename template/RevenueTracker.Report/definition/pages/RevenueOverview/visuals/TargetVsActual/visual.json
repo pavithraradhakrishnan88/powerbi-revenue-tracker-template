@@ -1,0 +1,70 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.3.0/schema.json",
+  "name": "TargetVsActual",
+  "position": {
+    "x": 640,
+    "y": 460,
+    "z": 4000,
+    "width": 620,
+    "height": 220,
+    "tabOrder": 4000
+  },
+  "visual": {
+    "visualType": "clusteredColumnChart",
+    "query": {
+      "queryState": {
+        "Category": {
+          "projections": [
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "Dim_Product"
+                    }
+                  },
+                  "Property": "ProductName"
+                }
+              },
+              "queryRef": "Dim_Product.ProductName",
+              "nativeQueryRef": "ProductName"
+            }
+          ]
+        },
+        "Y": {
+          "projections": [
+            {
+              "field": {
+                "Measure": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "Fact_Revenue"
+                    }
+                  },
+                  "Property": "Total Revenue"
+                }
+              },
+              "queryRef": "Fact_Revenue.Total Revenue",
+              "nativeQueryRef": "Total Revenue"
+            },
+            {
+              "field": {
+                "Measure": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "Dim_Target"
+                    }
+                  },
+                  "Property": "Target Revenue"
+                }
+              },
+              "queryRef": "Dim_Target.Target Revenue",
+              "nativeQueryRef": "Target Revenue"
+            }
+          ]
+        }
+      }
+    },
+    "objects": {}
+  }
+}
