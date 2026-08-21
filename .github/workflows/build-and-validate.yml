@@ -35,22 +35,14 @@ jobs:
 
       - name: Restore orchestrator
         shell: pwsh
-        run: dotnet restore src/RevenueTemplateOrchestrator/RevenueTemplateOrchestrator.csproj
-        # $LASTEXITCODE is checked on the very next line, nothing in between — this is
-        # the fix for the pitfall documented in Program.cs / the SLA runbook.
-
-      - name: Check restore exit code
-        shell: pwsh
         run: |
+          dotnet restore src/RevenueTemplateOrchestrator/RevenueTemplateOrchestrator.csproj
           if ($LASTEXITCODE -ne 0) { throw "dotnet restore failed with exit code $LASTEXITCODE" }
 
       - name: Build orchestrator
         shell: pwsh
-        run: dotnet build src/RevenueTemplateOrchestrator/RevenueTemplateOrchestrator.csproj -c Release --no-restore
-
-      - name: Check build exit code
-        shell: pwsh
         run: |
+          dotnet build src/RevenueTemplateOrchestrator/RevenueTemplateOrchestrator.csproj -c Release --no-restore
           if ($LASTEXITCODE -ne 0) { throw "dotnet build failed with exit code $LASTEXITCODE" }
 
       - name: Run orchestrator (generate PBIP artifacts)
@@ -58,10 +50,6 @@ jobs:
         run: |
           dotnet run --project src/RevenueTemplateOrchestrator/RevenueTemplateOrchestrator.csproj -c Release --no-build -- `
             "$env:TEMPLATE_ROOT" "$env:DATA_ROOT" "$env:OUTPUT_ROOT"
-
-      - name: Check orchestrator exit code
-        shell: pwsh
-        run: |
           if ($LASTEXITCODE -ne 0) { throw "Orchestrator failed with exit code $LASTEXITCODE" }
 
       - name: Gate — measure expression parity

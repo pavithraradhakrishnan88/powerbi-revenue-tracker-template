@@ -65,7 +65,7 @@ public static class MeasureDefinitions
             // MonthYear is stored as zero-padded "YYYY-MM" text specifically so lexical
             // string comparison (<, >) is equivalent to chronological comparison — avoids
             // needing a certified date table / DATEADD for a simple prior-month lookup.
-            Expression =
+            Expression:
                 "VAR CurrentMonthYear = MAX(Dim_MonthYear[MonthYear])\n" +
                 "VAR PreviousMonthYear =\n" +
                 "    CALCULATE(\n" +
@@ -84,7 +84,7 @@ public static class MeasureDefinitions
         new MeasureDefinition(
             Table: "Fact_Revenue",
             Name: "Revenue MoM Growth %",
-            Expression =
+            Expression:
                 "VAR Prev = [Revenue Previous Month]\n" +
                 "RETURN DIVIDE([Total Revenue] - Prev, Prev, BLANK())",
             FormatString: "0.0%;-0.0%",
