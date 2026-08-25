@@ -101,7 +101,7 @@
         "labels": [
           {
             "color": "#1F1B2E",
-            "fontSize": 28,
+            "fontSize": 32,
             "fontFamily": "Segoe UI Semibold"
           }
         ],
@@ -115,6 +115,20 @@
       }
     },
     "columnChart": {
+      "*": {
+        "dataPoint": [
+          {
+            "defaultColor": {
+              "solid": {
+                "color": "#7B5CFA"
+              }
+            },
+            "showAllDataPoints": false
+          }
+        ]
+      }
+    },
+    "barChart": {
       "*": {
         "dataPoint": [
           {
