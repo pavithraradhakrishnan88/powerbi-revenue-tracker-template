@@ -107,7 +107,13 @@ jobs:
             $json = Get-Content -Raw $path | ConvertFrom-Json
             if ([string]$json.visual.visualType -ne $expected[$name]) { throw "NATIVE-VISUAL-GATE failed: $name visualType is '$($json.visual.visualType)', expected '$($expected[$name])'" }
           }
-          Write-Host 'NATIVE-VISUAL-GATE|PASS|Visuals=4/4|Types=validated'
+          Write-Host 'NATIVE-VISUAL-GATE|PASS|Visuals=4/4|Types=validated|CustomVisualsExcluded=PASS'
+
+      - name: CUSTOM VISUAL — HTML navigation buttons
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          .\scripts\Assert-RevenueThemeGate.ps1 -GeneratedRoot "$env:OUTPUT_ROOT"
 
       - name: SHAPES / BUTTONS / BOOKMARKS — integrity scan
         shell: pwsh
@@ -121,16 +127,15 @@ jobs:
           $buttonVisuals = @($visualFiles | Where-Object { (Get-Content -Raw $_.FullName) -match 'button' })
           Write-Host "INTERACTIVE-ARTIFACT-GATE|PASS|Shapes=$($shapeVisuals.Count)|Buttons=$($buttonVisuals.Count)|Bookmarks=$($bookmarkFiles.Count)|VisualJsonParse=PASS"
 
-      - name: 4/4 VISUAL + PBIR VALIDATION
+      - name: PBIR VALIDATION — all generated visuals
         shell: pwsh
         run: |
           $pagesRoot = Join-Path $env:OUTPUT_ROOT 'RevenueTracker.Report\definition\pages'
           $generatedVisuals = @(Get-ChildItem -Path $pagesRoot -Recurse -Filter 'visual.json' -File).Count
-          if ($generatedVisuals -lt 4) { throw "PBIR validation failed: expected at least 4 generated visuals, found $generatedVisuals." }
-          .\scripts\Assert-RevenueThemeGate.ps1 -GeneratedRoot "$env:OUTPUT_ROOT"
+          if ($generatedVisuals -lt 5) { throw "PBIR validation failed: expected at least 5 generated visuals including the HTML navigation visual, found $generatedVisuals." }
           .\scripts\Assert-MeasureExpressionParity.ps1 -GeneratedRoot "$env:OUTPUT_ROOT"
           .\scripts\Assert-PbirPageLayoutGate.ps1 -GeneratedRoot "$env:OUTPUT_ROOT"
-          Write-Host "PBIR-VALIDATION|PASS|GeneratedVisuals=$generatedVisuals|AllVisuals=validated|Measures=parity|Pages=valid"
+          Write-Host "PBIR-VALIDATION|PASS|GeneratedVisuals=$generatedVisuals|NativeFormatting=4/4|CustomVisual=validated-separately|Measures=parity|Pages=valid"
 
       - name: DATA LOAD GATE — verify source inputs
         shell: pwsh
@@ -189,7 +194,7 @@ jobs:
           & .\scripts\Assert-ThreeArtifactStructure.ps1 -GeneratedRoot "$env:OUTPUT_ROOT" -Gate assembly
           & .\scripts\Assert-RevenueThemeGate.ps1 -GeneratedRoot "$env:OUTPUT_ROOT"
           & .\scripts\Assert-PbirPageLayoutGate.ps1 -GeneratedRoot "$env:OUTPUT_ROOT"
-          Write-Host 'DESKTOP-UAT|PASS|ThreeArtifacts=coherent|Theme=valid|PBIR=all-generated-visuals|Pages=valid|VersionJson=2.0.0'
+          Write-Host 'DESKTOP-UAT|PASS|ThreeArtifacts=coherent|Theme=valid|PBIR=all-generated-visuals|NativeFormatting=4/4|CustomVisual=valid|Pages=valid|VersionJson=2.0.0'
           Write-Host 'NOTE|Executable Power BI Desktop launch remains a runner-specific UAT and is not claimed by this static gate.'
 
       - name: PUBLISH — single verified Revenue Tracker bundle
