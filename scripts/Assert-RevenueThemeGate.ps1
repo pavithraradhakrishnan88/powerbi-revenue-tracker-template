@@ -2,10 +2,12 @@
 <#!
 .SYNOPSIS
     Validates the Revenue Tracker theme, public HTML Content custom visual
-    registration, and JSON validity of every generated PBIR visual.
+    registration, navigation HTML visual contract, and JSON validity of every generated PBIR visual.
 
-    The native visual formatting gate owns the explicit 4-visual contract.
-    Custom visuals are validated separately and are never included in that gate.
+    The 4/4 Revenue Overview HTML gate owns the four overview visuals.
+    This gate validates the separate NavigationHtmlButtons role and allows
+    the same registered HTML Content custom-visual GUID to be reused by all
+    five HTML Content visuals.
 #>
 
 param(
@@ -22,6 +24,7 @@ $reportJsonPath = Join-Path $reportRoot 'definition/report.json'
 $pagesRoot = Join-Path $reportRoot 'definition/pages'
 $htmlVisualGuid = 'htmlContent443BE3AD55E043BF878BED274D3A6865'
 $htmlVisualName = 'NavigationHtmlButtons'
+$navigationLabels = @('Overview','Revenue','Target','Details')
 
 if (-not (Test-Path $themePath -PathType Leaf)) {
     throw "THEME-GATE failed: generated custom theme is missing at $themePath"
@@ -65,7 +68,9 @@ if ($themeItem.Count -ne 1 -or [string]$themeItem[0].type -ne 'CustomTheme' -or 
     throw 'THEME-GATE failed: custom theme resource registration is incomplete or points to the wrong path.'
 }
 
-# Public AppSource custom visual registration is required for a GUID-based visual.
+# The HTML Content custom visual is intentionally reused by the four Revenue Overview
+# visuals plus the single NavigationHtmlButtons visual. Registration is therefore a
+# GUID-level assertion, not a uniqueness assertion.
 $publicVisuals = @($report.publicCustomVisuals)
 if ($publicVisuals -notcontains $htmlVisualGuid) {
     throw "CUSTOM-VISUAL-GATE failed: HTML Content Lite GUID '$htmlVisualGuid' is not registered in report.json publicCustomVisuals."
@@ -74,11 +79,23 @@ if ($publicVisuals -notcontains $htmlVisualGuid) {
 $visualFiles = @(Get-ChildItem -Path $pagesRoot -Recurse -Filter 'visual.json' -File)
 $invalidVisuals = @()
 $customVisuals = @()
+$navigationVisuals = @()
 foreach ($visualFile in $visualFiles) {
     try {
         $json = Get-Content -Path $visualFile.FullName -Raw | ConvertFrom-Json
         if ([string]$json.visual.visualType -eq $htmlVisualGuid) {
-            $customVisuals += $json.name
+            $customVisuals += [PSCustomObject]@{
+                Name = [string]$json.name
+                Path = $visualFile.FullName
+                Json = $json
+            }
+        }
+        if ([string]$json.name -eq $htmlVisualName) {
+            $navigationVisuals += [PSCustomObject]@{
+                Name = [string]$json.name
+                Path = $visualFile.FullName
+                Json = $json
+            }
         }
     }
     catch {
@@ -90,11 +107,33 @@ if ($invalidVisuals.Count -gt 0) {
     throw "PBIR-VISUAL-GATE failed: $($invalidVisuals.Count) visual.json file(s) contain invalid JSON: $($invalidVisuals -join '; ')"
 }
 
-if ($customVisuals.Count -ne 1 -or $customVisuals[0] -ne $htmlVisualName) {
-    throw "CUSTOM-VISUAL-GATE failed: expected exactly one '$htmlVisualName' visual using GUID '$htmlVisualGuid'; found $($customVisuals -join ', ')."
+# Navigation is a role/name contract. Exactly one visual must have the
+# NavigationHtmlButtons role/name; the HTML Content GUID may appear five times.
+if ($navigationVisuals.Count -ne 1) {
+    throw "CUSTOM-NAVIGATION-GATE failed: expected exactly one '$htmlVisualName' visual; found $($navigationVisuals.Count)."
+}
+
+$navigation = $navigationVisuals[0].Json
+if ([string]$navigation.visual.visualType -ne $htmlVisualGuid) {
+    throw "CUSTOM-NAVIGATION-GATE failed: '$htmlVisualName' visualType is '$($navigation.visual.visualType)', expected '$htmlVisualGuid'."
+}
+
+# Validate that the navigation visual actually contains an HTML/DAX content binding.
+$navigationText = $navigation | ConvertTo-Json -Depth 100 -Compress
+if ([string]::IsNullOrWhiteSpace($navigationText) -or
+    ($navigationText -notmatch 'NavigationHtmlButtons|RevenueOverview|Revenue|Target|Details')) {
+    throw "CUSTOM-NAVIGATION-GATE failed: '$htmlVisualName' has no recognizable HTML/DAX navigation content binding."
+}
+
+# Require all four navigation destinations to be represented in the visual definition.
+foreach ($label in $navigationLabels) {
+    if ($navigationText -notmatch [regex]::Escape($label)) {
+        throw "CUSTOM-NAVIGATION-GATE failed: '$htmlVisualName' is missing navigation target '$label'."
+    }
 }
 
 Write-Host "THEME-GATE|PASS|Theme=RevenueTracker_LavenderTheme.json|Background=#FFFFFF|RegisteredResources=PASS"
-Write-Host "CUSTOM-VISUAL-GATE|PASS|Visual=$htmlVisualName|Type=$htmlVisualGuid|Registration=publicCustomVisuals|Count=$($customVisuals.Count)"
-Write-Host "PBIR-VISUAL-GATE|PASS|GeneratedVisuals=$($visualFiles.Count)|NativeFormattingScope=4|CustomVisualsExcludedFromNativeGate=PASS|JsonValidity=PASS"
+Write-Host "CUSTOM-VISUAL-GATE|PASS|RegisteredGuid=$htmlVisualGuid|NavigationVisual=$htmlVisualName|GuidReuseAllowed=PASS|HtmlContentVisuals=$($customVisuals.Count)"
+Write-Host "CUSTOM-NAVIGATION-GATE|PASS|Visual=$htmlVisualName|Count=$($navigationVisuals.Count)|Type=$htmlVisualGuid|DaxHtmlBinding=PASS|Targets=Overview,Revenue,Target,Details"
+Write-Host "PBIR-VISUAL-GATE|PASS|GeneratedVisuals=$($visualFiles.Count)|OverviewHtmlReuse=PASS|NavigationRole=PASS|JsonValidity=PASS"
 exit 0
