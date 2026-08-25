@@ -23,7 +23,7 @@ table Fact_Revenue
 		dataType: string
 		lineageTag = fact-revenue-col-productid
 		summarizeBy: none
-		sourceColumn: ProductID
+	sourceColumn: ProductID
 
 		annotation SummarizationSetBy = Automatic
 
@@ -67,7 +67,7 @@ table Fact_Revenue
 		dataType: int64
 		lineageTag = fact-revenue-col-isrefund
 		summarizeBy: sum
-		sourceColumn: IsRefund
+	sourceColumn: IsRefund
 
 		annotation SummarizationSetBy = Automatic
 
@@ -79,7 +79,7 @@ table Fact_Revenue
 
 		annotation SummarizationSetBy = Automatic
 
-	measure NavigationButtonsHtml = "<div style='display:flex;gap:8px;align-items:center;font-family:Segoe UI,sans-serif;'><a href='?pageName=RevenueOverview' style='display:inline-block;padding:8px 14px;border-radius:10px;background:#7B5CFA;color:#FFFFFF;text-decoration:none;font-weight:600;font-size:12px;box-shadow:0 3px 10px rgba(123,92,250,.18);'>Overview</a><a href='?pageName=Revenue' style='display:inline-block;padding:8px 14px;border-radius:10px;background:#FFFFFF;color:#1F1B2E;text-decoration:none;font-weight:600;font-size:12px;border:1px solid #E6E1F5;box-shadow:0 3px 10px rgba(31,27,46,.08);'>Revenue</a><a href='?pageName=Target' style='display:inline-block;padding:8px 14px;border-radius:10px;background:#FFFFFF;color:#1F1B2E;text-decoration:none;font-weight:600;font-size:12px;border:1px solid #E6E1F5;box-shadow:0 3px 10px rgba(31,27,46,.08);'>Target</a><a href='?pageName=Details' style='display:inline-block;padding:8px 14px;border-radius:10px;background:#FFFFFF;color:#1F1B2E;text-decoration:none;font-weight:600;font-size:12px;border:1px solid #E6E1F5;box-shadow:0 3px 10px rgba(31,27,46,.08);'>Details</a></div>
+	measure NavigationHtmlButtons = "RETURN \"<nav data-role='NavigationHtmlButtons' data-navigation-contract='Overview|RevenueOverview;Revenue|Revenue;Target|Target;Details|Details' style='display:flex;gap:8px;align-items:center;padding:10px 12px;background:#fff;border:1px solid #ECEAF6;border-radius:12px;box-shadow:0 2px 12px rgba(216,210,240,.55);font-family:Segoe UI,sans-serif'>\" & \"<a data-label='Overview' data-target='RevenueOverview' href='#RevenueOverview' style='padding:7px 13px;border-radius:999px;background:#7B5CFA;color:#fff;text-decoration:none;font-size:11px'>Overview</a>\" & \"<a data-label='Revenue' data-target='Revenue' href='#Revenue' style='padding:7px 13px;border-radius:999px;background:#fff;color:#1F1B2E;text-decoration:none;font-size:11px;border:1px solid #ECEAF6'>Revenue</a>\" & \"<a data-label='Target' data-target='Target' href='#Target' style='padding:7px 13px;border-radius:999px;background:#fff;color:#1F1B2E;text-decoration:none;font-size:11px;border:1px solid #ECEAF6'>Target</a>\" & \"<a data-label='Details' data-target='Details' href='#Details' style='padding:7px 13px;border-radius:999px;background:#fff;color:#1F1B2E;text-decoration:none;font-size:11px;border:1px solid #ECEAF6'>Details</a>\" & \"</nav>\""
 		lineageTag = measure-navigation-buttons-html-001
 
 	partition Fact_Revenue = m
