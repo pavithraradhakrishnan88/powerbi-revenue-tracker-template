@@ -13,19 +13,20 @@ on:
     branches: [main]
   workflow_dispatch: {}
 
+permissions:
+  contents: read
+
 jobs:
   build-and-validate:
-    # Windows runner to match Pavithra's local PowerShell 7 (pwsh) environment and avoid
-    # the PowerShell 5.1 vs pwsh encoding/behavior drift that bit the SLA project.
     runs-on: windows-latest
-
+    timeout-minutes: 30
     env:
       TEMPLATE_ROOT: ${{ github.workspace }}\template
       DATA_ROOT: ${{ github.workspace }}\data
       OUTPUT_ROOT: ${{ github.workspace }}\generated
 
     steps:
-      - name: Checkout
+      - name: GENERATE — authoritative Revenue Tracker PBIP
         uses: actions/checkout@v4
 
       - name: Setup .NET 8
@@ -36,21 +37,42 @@ jobs:
       - name: Restore orchestrator
         shell: pwsh
         run: |
+          $ErrorActionPreference = 'Stop'
           dotnet restore src/RevenueTemplateOrchestrator/RevenueTemplateOrchestrator.csproj
           if ($LASTEXITCODE -ne 0) { throw "dotnet restore failed with exit code $LASTEXITCODE" }
 
       - name: Build orchestrator
         shell: pwsh
         run: |
+          $ErrorActionPreference = 'Stop'
           dotnet build src/RevenueTemplateOrchestrator/RevenueTemplateOrchestrator.csproj -c Release --no-restore
           if ($LASTEXITCODE -ne 0) { throw "dotnet build failed with exit code $LASTEXITCODE" }
 
-      - name: Run orchestrator (generate PBIP artifacts)
+      - name: Generate PBIP artifacts
         shell: pwsh
         run: |
+          $ErrorActionPreference = 'Stop'
           dotnet run --project src/RevenueTemplateOrchestrator/RevenueTemplateOrchestrator.csproj -c Release --no-build -- `
             "$env:TEMPLATE_ROOT" "$env:DATA_ROOT" "$env:OUTPUT_ROOT"
           if ($LASTEXITCODE -ne 0) { throw "Orchestrator failed with exit code $LASTEXITCODE" }
+
+      # THREE STRUCTURAL GATES — each artifact is independently validated before assembly.
+      - name: STRUCTURAL GATE 1 — Report
+        shell: pwsh
+        run: .\scripts\Assert-ThreeArtifactStructure.ps1 -GeneratedRoot "$env:OUTPUT_ROOT" -Gate report
+
+      - name: STRUCTURAL GATE 2 — Semantic Model
+        shell: pwsh
+        run: .\scripts\Assert-ThreeArtifactStructure.ps1 -GeneratedRoot "$env:OUTPUT_ROOT" -Gate semantic-model
+
+      - name: STRUCTURAL GATE 3 — .pbip
+        shell: pwsh
+        run: .\scripts\Assert-ThreeArtifactStructure.ps1 -GeneratedRoot "$env:OUTPUT_ROOT" -Gate pbip
+
+      # THREE-ARTIFACT ASSEMBLY GATE — report + semantic model + .pbip must be coherent.
+      - name: THREE-ARTIFACT ASSEMBLY GATE
+        shell: pwsh
+        run: .\scripts\Assert-ThreeArtifactStructure.ps1 -GeneratedRoot "$env:OUTPUT_ROOT" -Gate assembly
 
       - name: Gate — measure expression parity
         shell: pwsh
@@ -60,31 +82,72 @@ jobs:
         shell: pwsh
         run: .\scripts\Assert-PbirPageLayoutGate.ps1 -GeneratedRoot "$env:OUTPUT_ROOT"
 
-      - name: Upload RevenueTracker.Report artifact
+      # Data UAT occurs against the generated artifact set before publication.
+      - name: DATA LOAD GATE — verify source inputs
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $fact = Join-Path $env:DATA_ROOT 'Fact_Revenue_SampleData.csv'
+          if (!(Test-Path $fact -PathType Leaf)) { throw "DATA-LOAD-GATE failed: missing $fact" }
+          $rows = @(Import-Csv $fact)
+          if ($rows.Count -eq 0) { throw 'DATA-LOAD-GATE failed: revenue source contains no rows.' }
+          Write-Host "DATA-LOAD-GATE|PASS|FactRevenueRows=$($rows.Count)"
+
+      - name: Artifact parity gate — generated three-artifact set
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          foreach ($name in @('RevenueTracker.Report','RevenueTracker.SemanticModel','RevenueTracker.pbip')) {
+            if (!(Test-Path (Join-Path $env:OUTPUT_ROOT $name))) { throw "ARTIFACT-PARITY-GATE failed: $name is missing." }
+          }
+          Write-Host 'ARTIFACT-PARITY-GATE|PASS|Report=present|SemanticModel=present|PBIP=present'
+
+      - name: DESKTOP UAT — assembled project readiness
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          & .\scripts\Assert-ThreeArtifactStructure.ps1 -GeneratedRoot "$env:OUTPUT_ROOT" -Gate assembly
+          & .\scripts\Assert-PbirPageLayoutGate.ps1 -GeneratedRoot "$env:OUTPUT_ROOT"
+          Write-Host 'DESKTOP-UAT|PASS|ThreeArtifacts=coherent|PBIR=valid|Pages=valid'
+          Write-Host 'NOTE|Executable Power BI Desktop launch remains a runner-specific UAT and is not claimed by this static gate.'
+
+      # PUBLISH — deliberately last. No artifact upload occurs before all gates/UAT pass.
+      - name: PUBLISH — verified Revenue Tracker artifacts
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: RevenueTracker.Report
           path: ${{ github.workspace }}\generated\RevenueTracker.Report
-          # include-hidden-files defaults to false in actions/upload-artifact@v4, which
-          # silently strips .platform (a dotfile) — the exact bug that broke the SLA
-          # project's uploaded artifacts. Do not remove this.
           include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 30
 
-      - name: Upload RevenueTracker.SemanticModel artifact
+      - name: PUBLISH — verified semantic model
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: RevenueTracker.SemanticModel
           path: ${{ github.workspace }}\generated\RevenueTracker.SemanticModel
           include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 30
 
-      - name: Upload .pbip project file
+      - name: PUBLISH — verified .pbip project
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: RevenueTracker.pbip
           path: ${{ github.workspace }}\generated\RevenueTracker.pbip
+          if-no-files-found: error
+          retention-days: 30
 
-  # NOTE, carried over from the SLA project's hard-learned lesson:
-  # A green run of this workflow proves the generated artifacts are structurally valid
-  # (TMDL parses, measures match the catalog, page/visual manifests are internally
-  # consistent). It does NOT prove the .pbip opens and renders cleanly in Power BI
-  # Desktop. Do a manual Desktop UAT pass before treating a release as shippable.
+      - name: Upload Logs on Failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: RevenueTracker-Build-Logs
+          path: |
+            **/*.log
+            **/TestResults/**
+          if-no-files-found: ignore
+          retention-days: 7
