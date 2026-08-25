@@ -2,11 +2,11 @@
   "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.3.0/schema.json",
   "name": "CardTotalRevenue",
   "position": {
-    "x": 20,
-    "y": 20,
+    "x": 32,
+    "y": 156,
     "z": 1000,
-    "width": 280,
-    "height": 120,
+    "width": 340,
+    "height": 220,
     "tabOrder": 1000
   },
   "visual": {
@@ -40,8 +40,13 @@
             "fontSize": {
               "expr": {
                 "Literal": {
-                  "Value": "28D"
+                  "Value": "32D"
                 }
+              }
+            },
+            "color": {
+              "solid": {
+                "color": "#1F1B2E"
               }
             }
           }
