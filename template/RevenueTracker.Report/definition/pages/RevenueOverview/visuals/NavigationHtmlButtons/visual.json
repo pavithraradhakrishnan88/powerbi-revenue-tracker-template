@@ -23,15 +23,38 @@
                       "Entity": "Fact_Revenue"
                     }
                   },
-                  "Property": "NavigationButtonsHtml"
+                  "Property": "NavigationHtmlButtons"
                 }
               },
-              "queryRef": "Fact_Revenue.NavigationButtonsHtml",
-              "nativeQueryRef": "NavigationButtonsHtml"
+              "queryRef": "Fact_Revenue.NavigationHtmlButtons",
+              "nativeQueryRef": "NavigationHtmlButtons"
             }
           ]
         }
       }
+    },
+    "prototypeQuery": {
+      "Version": 2,
+      "From": [
+        {
+          "Name": "f",
+          "Entity": "Fact_Revenue",
+          "Type": 0
+        }
+      ],
+      "Select": [
+        {
+          "Measure": {
+            "Expression": {
+              "SourceRef": {
+                "Source": "f"
+              }
+            },
+            "Property": "NavigationHtmlButtons"
+          },
+          "Name": "Fact_Revenue.NavigationHtmlButtons"
+        }
+      ]
     },
     "objects": {
       "contentFormatting": [
