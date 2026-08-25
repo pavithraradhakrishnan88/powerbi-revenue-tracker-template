@@ -73,6 +73,10 @@ jobs:
         shell: pwsh
         run: .\scripts\Assert-ThreeArtifactStructure.ps1 -GeneratedRoot "$env:OUTPUT_ROOT" -Gate assembly
 
+      - name: Gate — theme and visual integrity (28/28 contract)
+        shell: pwsh
+        run: .\scripts\Assert-RevenueThemeGate.ps1 -GeneratedRoot "$env:OUTPUT_ROOT" -ExpectedVisualCount 28
+
       - name: Gate — measure expression parity
         shell: pwsh
         run: .\scripts\Assert-MeasureExpressionParity.ps1 -GeneratedRoot "$env:OUTPUT_ROOT"
@@ -124,7 +128,6 @@ jobs:
             if (!(Test-Path (Join-Path $verifyRoot $name))) { throw "PACKAGE-GATE failed: $name is missing from ZIP." }
           }
 
-          # version.json is PBIR metadata under definition/, not at the report root.
           $generatedVersion = Join-Path $env:OUTPUT_ROOT 'RevenueTracker.Report\definition\version.json'
           $packagedVersion = Join-Path $verifyRoot 'RevenueTracker.Report\definition\version.json'
           if (!(Test-Path $generatedVersion -PathType Leaf)) { throw 'PACKAGE-GATE failed: generated definition/version.json is missing.' }
@@ -134,15 +137,21 @@ jobs:
           if ([string]$generatedVersionJson.version -ne [string]$packagedVersionJson.version) { throw 'PACKAGE-GATE failed: definition/version.json changed during assembly.' }
           if ([string]$generatedVersionJson.version -ne '2.0.0') { throw 'PACKAGE-GATE failed: definition/version.json must declare PBIR version 2.0.0.' }
 
-          Write-Host 'PACKAGE-GATE|PASS|Unit=RevenueTracker-PBIP.zip|Report=inside|SemanticModel=inside|PBIP=inside|VersionJson=definition/version.json|Version=2.0.0'
+          $generatedTheme = Join-Path $env:OUTPUT_ROOT 'RevenueTracker.Report\StaticResources\RegisteredResources\RevenueTracker_LavenderTheme.json'
+          $packagedTheme = Join-Path $verifyRoot 'RevenueTracker.Report\StaticResources\RegisteredResources\RevenueTracker_LavenderTheme.json'
+          if (!(Test-Path $generatedTheme -PathType Leaf)) { throw 'PACKAGE-GATE failed: generated custom theme is missing.' }
+          if (!(Test-Path $packagedTheme -PathType Leaf)) { throw 'PACKAGE-GATE failed: custom theme was lost during assembly.' }
+
+          Write-Host 'PACKAGE-GATE|PASS|Unit=RevenueTracker-PBIP.zip|Report=inside|SemanticModel=inside|PBIP=inside|Theme=inside|Version=2.0.0'
 
       - name: DESKTOP UAT — assembled project readiness
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
           & .\scripts\Assert-ThreeArtifactStructure.ps1 -GeneratedRoot "$env:OUTPUT_ROOT" -Gate assembly
+          & .\scripts\Assert-RevenueThemeGate.ps1 -GeneratedRoot "$env:OUTPUT_ROOT" -ExpectedVisualCount 28
           & .\scripts\Assert-PbirPageLayoutGate.ps1 -GeneratedRoot "$env:OUTPUT_ROOT"
-          Write-Host 'DESKTOP-UAT|PASS|ThreeArtifacts=coherent|PBIR=valid|Pages=valid|VersionJson=2.0.0'
+          Write-Host 'DESKTOP-UAT|PASS|ThreeArtifacts=coherent|Theme=valid|PBIR=28of28|Pages=valid|VersionJson=2.0.0'
           Write-Host 'NOTE|Executable Power BI Desktop launch remains a runner-specific UAT and is not claimed by this static gate.'
 
       - name: PUBLISH — single verified Revenue Tracker bundle
