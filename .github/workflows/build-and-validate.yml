@@ -92,26 +92,56 @@ jobs:
           Write-Host "DATA-LOAD-GATE|PASS|FactRevenueRows=$($rows.Count)"
 
       # Assembly is the publication unit: one ZIP containing all three PBIP artifacts.
-      # The individual directories are never uploaded as separate GitHub artifacts.
+      # Do not synthesize PBIP metadata here. The generated tree is authoritative.
+      # In particular, version.json is copied only if it actually exists in the generated
+      # template tree. The template currently has no version.json, so the package must not
+      # manufacture one just to satisfy a downstream check.
       - name: PACKAGE — single Revenue Tracker PBIP bundle
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
           if (Test-Path $env:PACKAGE_ROOT) { Remove-Item $env:PACKAGE_ROOT -Recurse -Force }
           New-Item -ItemType Directory -Path $env:PACKAGE_ROOT -Force | Out-Null
+
           foreach ($name in @('RevenueTracker.Report','RevenueTracker.SemanticModel','RevenueTracker.pbip')) {
             $source = Join-Path $env:OUTPUT_ROOT $name
             if (!(Test-Path $source)) { throw "PACKAGE-GATE failed: $name is missing." }
             Copy-Item $source (Join-Path $env:PACKAGE_ROOT $name) -Recurse -Force
           }
-          $zip = Join-Path $env:PACKAGE_ROOT 'RevenueTracker-PBIP.zip'
-          Compress-Archive -Path @(
-            (Join-Path $env:PACKAGE_ROOT 'RevenueTracker.Report'),
-            (Join-Path $env:PACKAGE_ROOT 'RevenueTracker.SemanticModel'),
-            (Join-Path $env:PACKAGE_ROOT 'RevenueTracker.pbip')
-          ) -DestinationPath $zip -Force
+
+          # Compress-Archive is deliberately not used: it can omit hidden PBIP files such
+          # as .platform. Use the .NET ZipFile implementation so the assembled ZIP is a
+          # faithful copy of the generated three-artifact tree.
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          $zip = Join-Path $env:GITHUB_WORKSPACE 'RevenueTracker-PBIP.zip'
+          if (Test-Path $zip) { Remove-Item $zip -Force }
+          [System.IO.Compression.ZipFile]::CreateFromDirectory(
+            $env:PACKAGE_ROOT,
+            $zip,
+            [System.IO.Compression.CompressionLevel]::Optimal,
+            $false
+          )
           if (!(Test-Path $zip -PathType Leaf)) { throw 'PACKAGE-GATE failed: bundle ZIP was not created.' }
-          Write-Host 'PACKAGE-GATE|PASS|Unit=RevenueTracker-PBIP.zip|Report=inside|SemanticModel=inside|PBIP=inside'
+
+          # Re-extract the package and assert the three-artifact boundary plus hidden
+          # metadata parity. This catches assembly loss without inventing any file.
+          $verifyRoot = Join-Path $env:GITHUB_WORKSPACE 'package-verify'
+          if (Test-Path $verifyRoot) { Remove-Item $verifyRoot -Recurse -Force }
+          [System.IO.Compression.ZipFile]::ExtractToDirectory($zip, $verifyRoot)
+          foreach ($name in @('RevenueTracker.Report','RevenueTracker.SemanticModel','RevenueTracker.pbip')) {
+            if (!(Test-Path (Join-Path $verifyRoot $name))) { throw "PACKAGE-GATE failed: $name is missing from ZIP." }
+          }
+
+          $generatedVersion = Join-Path $env:OUTPUT_ROOT 'RevenueTracker.Report\version.json'
+          $packagedVersion = Join-Path $verifyRoot 'RevenueTracker.Report\version.json'
+          if ((Test-Path $generatedVersion) -and !(Test-Path $packagedVersion)) {
+            throw 'PACKAGE-GATE failed: generated version.json was lost during assembly.'
+          }
+          if (!(Test-Path $generatedVersion) -and (Test-Path $packagedVersion)) {
+            throw 'PACKAGE-GATE failed: assembly fabricated version.json.'
+          }
+
+          Write-Host "PACKAGE-GATE|PASS|Unit=RevenueTracker-PBIP.zip|Report=inside|SemanticModel=inside|PBIP=inside|VersionJson=$([bool](Test-Path $generatedVersion))"
 
       - name: DESKTOP UAT — assembled project readiness
         shell: pwsh
@@ -128,7 +158,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: RevenueTracker-PBIP
-          path: ${{ github.workspace }}\package\RevenueTracker-PBIP.zip
+          path: ${{ github.workspace }}\RevenueTracker-PBIP.zip
           if-no-files-found: error
           retention-days: 30
 
