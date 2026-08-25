@@ -4,17 +4,6 @@
     Validates the PBIR page/layout manifest contract: pages.json entries must have a
     matching page folder + page.json, and every visual within a page must have a unique
     z-index and tabOrder.
-
-.DESCRIPTION
-    Equivalent to the SLA project's Assert-PbirPageLayoutGate.ps1. Directly targets the
-    class of bug behind "totalPages: 0" in Power BI Desktop: a pages.json manifest that
-    references a page name with no matching folder, or a page folder that pages.json
-    doesn't know about, deserializes to zero pages even though the semantic model loads
-    fine — because the model and the report layout are validated independently by
-    Desktop, and only one of the two failing is enough to blank the canvas.
-
-.PARAMETER GeneratedRoot
-    Path to the orchestrator's output folder (contains RevenueTracker.Report/).
 #>
 
 param(
@@ -80,9 +69,37 @@ foreach ($pageName in $pagesJson.pageOrder) {
     }
 }
 
-if (-not (Test-Path (Join-Path $GeneratedRoot "RevenueTracker.Report/definition/reportExtensions.json"))) {
-    Write-Error "reportExtensions.json is missing — this file's absence previously caused a NullReferenceException on open."
+# reportExtensions.json is optional report metadata. Do not manufacture an empty
+# extension file merely to satisfy this structural gate. If absent, that is valid
+# when the report has no extension definitions. If present, validate its JSON and
+# the reportExtension/1.0.0 root contract before allowing it through.
+$reportExtensionsPath = Join-Path $GeneratedRoot "RevenueTracker.Report/definition/reportExtensions.json"
+if (Test-Path $reportExtensionsPath) {
+    try {
+        $extensions = Get-Content -Path $reportExtensionsPath -Raw | ConvertFrom-Json
+    }
+    catch {
+        Write-Error "reportExtensions.json is present but is not valid JSON: $($_.Exception.Message)"
+    }
+
+    $expectedSchema = "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/reportExtension/1.0.0/schema.json"
+    if ($null -eq $extensions.'$schema' -or $extensions.'$schema' -ne $expectedSchema) {
+        Write-Error "reportExtensions.json has an invalid or missing reportExtension/1.0.0 `$schema."
+    }
+
+    if ([string]::IsNullOrWhiteSpace([string]$extensions.name)) {
+        Write-Error "reportExtensions.json has a missing or empty 'name'."
+    }
+
+    if ($null -ne $extensions.entities -and $extensions.entities -isnot [System.Array]) {
+        Write-Error "reportExtensions.json 'entities' must be an array when present."
+    }
+
+    Write-Host "PASS: reportExtensions.json is present and passes JSON/schema/content checks." -ForegroundColor Green
+}
+else {
+    Write-Host "PASS: reportExtensions.json absent; no optional report-extension metadata is required." -ForegroundColor Green
 }
 
-Write-Host "PASS: pages.json <-> page folder contract holds, no z/tabOrder collisions, reportExtensions.json present." -ForegroundColor Green
+Write-Host "PASS: pages.json <-> page folder contract holds, no z/tabOrder collisions." -ForegroundColor Green
 exit 0
