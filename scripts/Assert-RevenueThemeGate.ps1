@@ -13,7 +13,7 @@ $reportJsonPath = Join-Path $reportRoot 'definition/report.json'
 $pagesRoot = Join-Path $reportRoot 'definition/pages'
 $htmlVisualGuid = 'htmlContent443BE3AD55E043BF878BED274D3A6865'
 $htmlVisualName = 'NavigationHtmlButtons'
-$navigationContract = @{
+$navigationContract = [ordered]@{
     Overview = 'RevenueOverview'
     Revenue  = 'Revenue'
     Target   = 'Target'
@@ -54,35 +54,46 @@ if ($navigationVisuals.Count -ne 1) { throw "CUSTOM-NAVIGATION-GATE failed: expe
 $navigation = $navigationVisuals[0].Json
 if ([string]$navigation.visual.visualType -ne $htmlVisualGuid) { throw "CUSTOM-NAVIGATION-GATE failed: '$htmlVisualName' visualType is '$($navigation.visual.visualType)'." }
 
-# The visual must bind to the NavigationHtmlButtons DAX measure. This is the
-# HTML/DAX binding contract; the DAX measure itself carries the target metadata.
-$visualText = $navigation | ConvertTo-Json -Depth 100 -Compress
-if ($visualText -notmatch 'NavigationHtmlButtons') { throw "CUSTOM-NAVIGATION-GATE failed: '$htmlVisualName' has no DAX HTML binding to NavigationHtmlButtons." }
+# Parse the actual visual binding instead of searching the entire serialized visual
+# JSON. PBIR may expose the binding under query/queryState or prototypeQuery.
+$bindingMeasures = @()
+$queryObjects = @()
+if ($null -ne $navigation.visual.query) { $queryObjects += $navigation.visual.query }
+if ($null -ne $navigation.visual.prototypeQuery) { $queryObjects += $navigation.visual.prototypeQuery }
+foreach ($queryObject in $queryObjects) {
+    $jsonText = $queryObject | ConvertTo-Json -Depth 100 -Compress
+    $matches = [regex]::Matches($jsonText, '"Property"\s*:\s*"([^"]+)"')
+    foreach ($match in $matches) { $bindingMeasures += $match.Groups[1].Value }
+    $matches = [regex]::Matches($jsonText, '"nativeQueryRef"\s*:\s*"([^"]+)"')
+    foreach ($match in $matches) { $bindingMeasures += $match.Groups[1].Value }
+    $matches = [regex]::Matches($jsonText, '"queryRef"\s*:\s*"[^"]+\.([^".]+)"')
+    foreach ($match in $matches) { $bindingMeasures += $match.Groups[1].Value }
+}
+$bindingMeasures = @($bindingMeasures | Sort-Object -Unique)
+if ($bindingMeasures -notcontains 'NavigationHtmlButtons') {
+    throw "CUSTOM-NAVIGATION-GATE failed: '$htmlVisualName' does not bind to measure 'NavigationHtmlButtons'. Parsed bindings: $($bindingMeasures -join ', ')"
+}
 
-# Locate the generated semantic-model measure and validate the explicit HTML
-# contract emitted by DAX. This avoids accepting arbitrary page-name text in
-# unrelated visual metadata.
-$measureFiles = @(Get-ChildItem $GeneratedRoot -Recurse -Filter '*.tmdl' -File | Where-Object { $_.FullName -match 'SemanticModel' -or $_.FullName -match 'Measures' })
+# Locate the generated semantic-model measure referenced by the actual binding.
+$measureFiles = @(Get-ChildItem $GeneratedRoot -Recurse -Filter '*.tmdl' -File | Where-Object { $_.FullName -match 'SemanticModel' })
 $measureText = ($measureFiles | ForEach-Object { Get-Content $_.FullName -Raw }) -join "`n"
-$measureMatch = [regex]::Match($measureText, '(?s)measure\s+NavigationHtmlButtons\s*=\s*(.*?)(?=\n\s*measure\s+|\n\s*partition\s+|\z)')
+$measureMatch = [regex]::Match($measureText, '(?ms)^\s*measure\s+NavigationHtmlButtons\s*=\s*(.*?)(?=^\s*measure\s+|^\s*partition\s+|\z)')
 if (-not $measureMatch.Success) { throw "CUSTOM-NAVIGATION-GATE failed: generated semantic model does not contain measure NavigationHtmlButtons." }
 $navigationDax = $measureMatch.Groups[1].Value
 
-# Require the machine-readable navigation contract and each clickable data-target.
-$expectedPairs = @('Overview|RevenueOverview','Revenue|Revenue','Target|Target','Details|Details')
-if ($navigationDax -notmatch 'data-navigation-contract') { throw 'CUSTOM-NAVIGATION-GATE failed: NavigationHtmlButtons DAX does not emit data-navigation-contract metadata.' }
-foreach ($pair in $expectedPairs) {
-    if ($navigationDax -notmatch [regex]::Escape($pair)) { throw "CUSTOM-NAVIGATION-GATE failed: DAX navigation contract is missing '$pair'." }
-}
+# Validate only the HTML contract emitted by the bound DAX measure.
+if ($navigationDax -notmatch 'data-navigation-contract') { throw 'CUSTOM-NAVIGATION-GATE failed: bound NavigationHtmlButtons DAX does not emit data-navigation-contract metadata.' }
 foreach ($entry in $navigationContract.GetEnumerator()) {
     $label = $entry.Key
     $target = $entry.Value
+    $pair = "$label|$target"
+    if ($navigationDax -notmatch [regex]::Escape($pair)) { throw "CUSTOM-NAVIGATION-GATE failed: DAX navigation contract is missing '$pair'." }
     $pattern = "data-label='$([regex]::Escape($label))'\s+data-target='$([regex]::Escape($target))'"
     if ($navigationDax -notmatch $pattern) { throw "CUSTOM-NAVIGATION-GATE failed: clickable target '$label' -> '$target' is missing or malformed." }
 }
 
 Write-Host "THEME-GATE|PASS|Theme=RevenueTracker_LavenderTheme.json|Background=#FFFFFF|RegisteredResources=PASS"
 Write-Host "CUSTOM-VISUAL-GATE|PASS|RegisteredGuid=$htmlVisualGuid|NavigationVisual=$htmlVisualName|GuidReuseAllowed=PASS|HtmlContentVisuals=$($customVisuals.Count)"
-Write-Host 'CUSTOM-NAVIGATION-GATE|PASS|Visual=NavigationHtmlButtons|Count=1|Type=HTMLContent|DaxHtmlBinding=PASS|Contract=Overview->RevenueOverview,Revenue->Revenue,Target->Target,Details->Details'
+Write-Host "CUSTOM-NAVIGATION-GATE|PASS|Visual=NavigationHtmlButtons|Count=1|Type=HTMLContent|DaxHtmlBinding=PASS|Measure=NavigationHtmlButtons|Contract=Overview->RevenueOverview,Revenue->Revenue,Target->Target,Details->Details"
 Write-Host "PBIR-VISUAL-GATE|PASS|GeneratedVisuals=$($visualFiles.Count)|OverviewHtmlReuse=PASS|NavigationRole=PASS|JsonValidity=PASS"
 exit 0
