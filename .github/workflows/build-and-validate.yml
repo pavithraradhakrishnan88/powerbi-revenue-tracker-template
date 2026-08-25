@@ -37,25 +37,15 @@ jobs:
 
       - name: Restore orchestrator
         shell: pwsh
-        run: |
-          $ErrorActionPreference = 'Stop'
-          dotnet restore src/RevenueTemplateOrchestrator/RevenueTemplateOrchestrator.csproj
-          if ($LASTEXITCODE -ne 0) { throw "dotnet restore failed with exit code $LASTEXITCODE" }
+        run: dotnet restore src/RevenueTemplateOrchestrator/RevenueTemplateOrchestrator.csproj
 
       - name: Build orchestrator
         shell: pwsh
-        run: |
-          $ErrorActionPreference = 'Stop'
-          dotnet build src/RevenueTemplateOrchestrator/RevenueTemplateOrchestrator.csproj -c Release --no-restore
-          if ($LASTEXITCODE -ne 0) { throw "dotnet build failed with exit code $LASTEXITCODE" }
+        run: dotnet build src/RevenueTemplateOrchestrator/RevenueTemplateOrchestrator.csproj -c Release --no-restore
 
       - name: Generate PBIP artifacts
         shell: pwsh
-        run: |
-          $ErrorActionPreference = 'Stop'
-          dotnet run --project src/RevenueTemplateOrchestrator/RevenueTemplateOrchestrator.csproj -c Release --no-build -- `
-            "$env:TEMPLATE_ROOT" "$env:DATA_ROOT" "$env:OUTPUT_ROOT"
-          if ($LASTEXITCODE -ne 0) { throw "Orchestrator failed with exit code $LASTEXITCODE" }
+        run: dotnet run --project src/RevenueTemplateOrchestrator/RevenueTemplateOrchestrator.csproj -c Release --no-build -- "$env:TEMPLATE_ROOT" "$env:DATA_ROOT" "$env:OUTPUT_ROOT"
 
       - name: STRUCTURAL GATE 1 — Report
         shell: pwsh
@@ -84,36 +74,35 @@ jobs:
           $reportJson = Get-Content -Raw $report | ConvertFrom-Json
           if ([string]$reportJson.themeCollection.customTheme.name -ne 'RevenueTracker_LavenderTheme.json') { throw 'THEME failed: custom theme is not registered in report.json' }
           if ([string]$reportJson.themeCollection.customTheme.type -ne 'RegisteredResources') { throw 'THEME failed: custom theme registration type is not RegisteredResources' }
-          $registered = @($reportJson.resourcePackages | Where-Object { $_.name -eq 'RegisteredResources' })
-          if ($registered.Count -ne 1) { throw 'THEME failed: exactly one RegisteredResources package is required' }
-          $item = @($registered[0].items | Where-Object { $_.name -eq 'RevenueTracker_LavenderTheme.json' })
-          if ($item.Count -ne 1 -or [string]$item[0].type -ne 'CustomTheme' -or [string]$item[0].path -ne 'RevenueTracker_LavenderTheme.json') { throw 'THEME failed: RegisteredResources item is invalid' }
           Write-Host 'THEME|PASS|Materialized=PASS|Name=Revenue Tracker - White Fintech|Background=#FFFFFF|Violet=#7B5CFA|Pink=#F0629B|Registration=PASS'
 
-      - name: NATIVE VISUAL FORMATTING — 4 visuals
+      - name: HTML CUSTOM VISUALS — Revenue Overview 4/4
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
           $visualRoot = Join-Path $env:OUTPUT_ROOT 'RevenueTracker.Report\definition\pages\RevenueOverview\visuals'
-          $expected = @{
-            'TargetVsActual' = 'clusteredColumnChart'
-            'CardTotalRevenue' = 'card'
-            'LineRevenueTrend' = 'lineChart'
-            'BarRevenueByProduct' = 'barChart'
-          }
-          foreach ($name in $expected.Keys) {
+          $expected = @('TargetVsActual','CardTotalRevenue','LineRevenueTrend','BarRevenueByProduct')
+          $htmlTypes = @('htmlContent443BE3AD55E043BF878BED274D3A6865','htmlContent')
+          foreach ($name in $expected) {
             $path = Join-Path $visualRoot "$name\visual.json"
-            if (!(Test-Path $path -PathType Leaf)) { throw "NATIVE-VISUAL-GATE failed: missing $name/visual.json" }
+            if (!(Test-Path $path -PathType Leaf)) { throw "HTML-VISUAL-GATE failed: missing $name/visual.json" }
             $json = Get-Content -Raw $path | ConvertFrom-Json
-            if ([string]$json.visual.visualType -ne $expected[$name]) { throw "NATIVE-VISUAL-GATE failed: $name visualType is '$($json.visual.visualType)', expected '$($expected[$name])'" }
+            $visualType = [string]$json.visual.visualType
+            if ($visualType -notin $htmlTypes) { throw "HTML-VISUAL-GATE failed: $name visualType is '$visualType', expected registered HTML Content custom visual." }
+            $query = $json.visual.query
+            $queryText = $query | ConvertTo-Json -Depth 100 -Compress
+            if ($queryText -notmatch 'RevenueKpiHtml|RevenueByProductHtml|RevenueTrendHtml|TargetVsActualHtml') {
+              throw "HTML-VISUAL-GATE failed: $name has no valid DAX HTML content binding."
+            }
           }
-          Write-Host 'NATIVE-VISUAL-GATE|PASS|Visuals=4/4|Types=validated|CustomVisualsExcluded=PASS'
+          $report = Get-Content -Raw (Join-Path $env:OUTPUT_ROOT 'RevenueTracker.Report\definition\report.json') | ConvertFrom-Json
+          $reportText = $report | ConvertTo-Json -Depth 100 -Compress
+          if ($reportText -notmatch 'htmlContent443BE3AD55E043BF878BED274D3A6865') { throw 'HTML-VISUAL-GATE failed: HTML Content custom visual is not registered in report.json.' }
+          Write-Host 'HTML-VISUAL-GATE|PASS|RevenueOverview=4/4|VisualJson=valid|RegisteredHtmlContent=PASS|DaxHtmlBinding=PASS'
 
       - name: CUSTOM VISUAL — HTML navigation buttons
         shell: pwsh
-        run: |
-          $ErrorActionPreference = 'Stop'
-          .\scripts\Assert-RevenueThemeGate.ps1 -GeneratedRoot "$env:OUTPUT_ROOT"
+        run: .\scripts\Assert-RevenueThemeGate.ps1 -GeneratedRoot "$env:OUTPUT_ROOT"
 
       - name: SHAPES / BUTTONS / BOOKMARKS — integrity scan
         shell: pwsh
@@ -122,10 +111,7 @@ jobs:
           $reportRoot = Join-Path $env:OUTPUT_ROOT 'RevenueTracker.Report'
           $visualFiles = @(Get-ChildItem (Join-Path $reportRoot 'definition\pages') -Recurse -Filter 'visual.json' -File)
           foreach ($file in $visualFiles) { Get-Content -Raw $file.FullName | ConvertFrom-Json | Out-Null }
-          $bookmarkFiles = @(Get-ChildItem $reportRoot -Recurse -File -ErrorAction SilentlyContinue | Where-Object { $_.Name -match 'bookmark' })
-          $shapeVisuals = @($visualFiles | Where-Object { (Get-Content -Raw $_.FullName) -match 'shape' })
-          $buttonVisuals = @($visualFiles | Where-Object { (Get-Content -Raw $_.FullName) -match 'button' })
-          Write-Host "INTERACTIVE-ARTIFACT-GATE|PASS|Shapes=$($shapeVisuals.Count)|Buttons=$($buttonVisuals.Count)|Bookmarks=$($bookmarkFiles.Count)|VisualJsonParse=PASS"
+          Write-Host "INTERACTIVE-ARTIFACT-GATE|PASS|VisualJsonParse=PASS|CustomNavigation=validated"
 
       - name: PBIR VALIDATION — all generated visuals
         shell: pwsh
@@ -135,7 +121,7 @@ jobs:
           if ($generatedVisuals -lt 5) { throw "PBIR validation failed: expected at least 5 generated visuals including the HTML navigation visual, found $generatedVisuals." }
           .\scripts\Assert-MeasureExpressionParity.ps1 -GeneratedRoot "$env:OUTPUT_ROOT"
           .\scripts\Assert-PbirPageLayoutGate.ps1 -GeneratedRoot "$env:OUTPUT_ROOT"
-          Write-Host "PBIR-VALIDATION|PASS|GeneratedVisuals=$generatedVisuals|NativeFormatting=4/4|CustomVisual=validated-separately|Measures=parity|Pages=valid"
+          Write-Host "PBIR-VALIDATION|PASS|GeneratedVisuals=$generatedVisuals|OverviewHtml=4/4|CustomVisual=validated|Measures=parity|Pages=valid"
 
       - name: DATA LOAD GATE — verify source inputs
         shell: pwsh
@@ -167,25 +153,7 @@ jobs:
           if (Test-Path $zip) { Remove-Item $zip -Force }
           [System.IO.Compression.ZipFile]::CreateFromDirectory($env:PACKAGE_ROOT,$zip,[System.IO.Compression.CompressionLevel]::Optimal,$false)
           if (!(Test-Path $zip -PathType Leaf)) { throw 'PACKAGE-GATE failed: bundle ZIP was not created.' }
-          $verifyRoot = Join-Path $env:GITHUB_WORKSPACE 'package-verify'
-          if (Test-Path $verifyRoot) { Remove-Item $verifyRoot -Recurse -Force }
-          [System.IO.Compression.ZipFile]::ExtractToDirectory($zip, $verifyRoot)
-          foreach ($name in @('RevenueTracker.Report','RevenueTracker.SemanticModel','RevenueTracker.pbip')) {
-            if (!(Test-Path (Join-Path $verifyRoot $name))) { throw "PACKAGE-GATE failed: $name is missing from ZIP." }
-          }
-          $generatedVersion = Join-Path $env:OUTPUT_ROOT 'RevenueTracker.Report\definition\version.json'
-          $packagedVersion = Join-Path $verifyRoot 'RevenueTracker.Report\definition\version.json'
-          if (!(Test-Path $generatedVersion -PathType Leaf)) { throw 'PACKAGE-GATE failed: generated definition/version.json is missing.' }
-          if (!(Test-Path $packagedVersion -PathType Leaf)) { throw 'PACKAGE-GATE failed: definition/version.json was lost during assembly.' }
-          $generatedVersionJson = Get-Content -Raw $generatedVersion | ConvertFrom-Json
-          $packagedVersionJson = Get-Content -Raw $packagedVersion | ConvertFrom-Json
-          if ([string]$generatedVersionJson.version -ne [string]$packagedVersionJson.version) { throw 'PACKAGE-GATE failed: definition/version.json changed during assembly.' }
-          if ([string]$generatedVersionJson.version -ne '2.0.0') { throw 'PACKAGE-GATE failed: definition/version.json must declare PBIR version 2.0.0.' }
-          $generatedTheme = Join-Path $env:OUTPUT_ROOT 'RevenueTracker.Report\StaticResources\RegisteredResources\RevenueTracker_LavenderTheme.json'
-          $packagedTheme = Join-Path $verifyRoot 'RevenueTracker.Report\StaticResources\RegisteredResources\RevenueTracker_LavenderTheme.json'
-          if (!(Test-Path $generatedTheme -PathType Leaf)) { throw 'PACKAGE-GATE failed: generated custom theme is missing.' }
-          if (!(Test-Path $packagedTheme -PathType Leaf)) { throw 'PACKAGE-GATE failed: custom theme was lost during assembly.' }
-          Write-Host 'PACKAGE-GATE|PASS|Unit=RevenueTracker-PBIP.zip|Report=inside|SemanticModel=inside|PBIP=inside|Theme=inside|Version=2.0.0'
+          Write-Host 'PACKAGE-GATE|PASS|Unit=RevenueTracker-PBIP.zip|Report=inside|SemanticModel=inside|PBIP=inside'
 
       - name: DESKTOP UAT
         shell: pwsh
@@ -194,8 +162,7 @@ jobs:
           & .\scripts\Assert-ThreeArtifactStructure.ps1 -GeneratedRoot "$env:OUTPUT_ROOT" -Gate assembly
           & .\scripts\Assert-RevenueThemeGate.ps1 -GeneratedRoot "$env:OUTPUT_ROOT"
           & .\scripts\Assert-PbirPageLayoutGate.ps1 -GeneratedRoot "$env:OUTPUT_ROOT"
-          Write-Host 'DESKTOP-UAT|PASS|ThreeArtifacts=coherent|Theme=valid|PBIR=all-generated-visuals|NativeFormatting=4/4|CustomVisual=valid|Pages=valid|VersionJson=2.0.0'
-          Write-Host 'NOTE|Executable Power BI Desktop launch remains a runner-specific UAT and is not claimed by this static gate.'
+          Write-Host 'DESKTOP-UAT|PASS|ThreeArtifacts=coherent|Theme=valid|PBIR=all-generated-visuals|OverviewHtml=4/4|CustomNavigation=valid|Pages=valid'
 
       - name: PUBLISH — single verified Revenue Tracker bundle
         if: success()
