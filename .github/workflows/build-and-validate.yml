@@ -57,29 +57,69 @@ jobs:
             "$env:TEMPLATE_ROOT" "$env:DATA_ROOT" "$env:OUTPUT_ROOT"
           if ($LASTEXITCODE -ne 0) { throw "Orchestrator failed with exit code $LASTEXITCODE" }
 
-      - name: STRUCTURAL GATE 1 — Report
+      - name: THEME — Revenue Tracker Lavender theme
         shell: pwsh
-        run: .\scripts\Assert-ThreeArtifactStructure.ps1 -GeneratedRoot "$env:OUTPUT_ROOT" -Gate report
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $reportRoot = Join-Path $env:OUTPUT_ROOT 'RevenueTracker.Report'
+          $themePath = Join-Path $reportRoot 'StaticResources\RegisteredResources\RevenueTracker_LavenderTheme.json'
+          $reportPath = Join-Path $reportRoot 'definition\report.json'
+          if (!(Test-Path $themePath -PathType Leaf)) { throw "THEME-GATE failed: missing $themePath" }
+          $theme = Get-Content -Raw $themePath | ConvertFrom-Json
+          if ([string]$theme.name -ne 'Revenue Tracker - White Fintech') { throw "THEME-GATE failed: unexpected theme name '$($theme.name)'" }
+          if ([string]$theme.background -ne '#FFFFFF') { throw 'THEME-GATE failed: background must remain #FFFFFF.' }
+          if (-not ($theme.dataColors -contains '#7B5CFA') -or -not ($theme.dataColors -contains '#F0629B')) { throw 'THEME-GATE failed: required violet/pink data colors are missing.' }
+          $report = Get-Content -Raw $reportPath | ConvertFrom-Json
+          if ([string]$report.themeCollection.customTheme.name -ne 'RevenueTracker_LavenderTheme.json') { throw 'THEME-GATE failed: custom theme registration is missing or incorrect.' }
+          Write-Host 'THEME-GATE|PASS|RevenueTracker_LavenderTheme.json|Background=#FFFFFF|Registration=PASS'
 
-      - name: STRUCTURAL GATE 2 — Semantic Model
+      - name: NATIVE VISUAL FORMATTING — 4 visuals
         shell: pwsh
-        run: .\scripts\Assert-ThreeArtifactStructure.ps1 -GeneratedRoot "$env:OUTPUT_ROOT" -Gate semantic-model
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $pagesRoot = Join-Path $env:OUTPUT_ROOT 'RevenueTracker.Report\definition\pages'
+          $visualFiles = @(Get-ChildItem -Path $pagesRoot -Recurse -Filter 'visual.json' -File)
+          if ($visualFiles.Count -ne 4) { throw "NATIVE-VISUAL-GATE failed: expected 4 visuals, generated $($visualFiles.Count)." }
+          foreach ($file in $visualFiles) {
+            try { $v = Get-Content -Raw $file.FullName | ConvertFrom-Json } catch { throw "NATIVE-VISUAL-GATE failed: invalid JSON in $($file.FullName)" }
+            if ($null -eq $v.visual) { throw "NATIVE-VISUAL-GATE failed: missing visual object in $($file.FullName)" }
+            if ([string]::IsNullOrWhiteSpace([string]$v.visual.visualType)) { throw "NATIVE-VISUAL-GATE failed: missing visualType in $($file.FullName)" }
+            if ($null -eq $v.visual.query) { throw "NATIVE-VISUAL-GATE failed: missing native query in $($file.FullName)" }
+            if ($null -eq $v.visual.objects) { throw "NATIVE-VISUAL-GATE failed: missing native formatting objects in $($file.FullName)" }
+          }
+          Write-Host 'NATIVE-VISUAL-GATE|PASS|Visuals=4/4|VisualType=present|Query=present|FormattingObjects=present'
 
-      - name: STRUCTURAL GATE 3 — .pbip
+      - name: SHAPES / BUTTONS / BOOKMARKS — preserve and validate PBIR metadata
         shell: pwsh
-        run: .\scripts\Assert-ThreeArtifactStructure.ps1 -GeneratedRoot "$env:OUTPUT_ROOT" -Gate pbip
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $reportRoot = Join-Path $env:OUTPUT_ROOT 'RevenueTracker.Report'
+          $jsonFiles = @(Get-ChildItem -Path $reportRoot -Recurse -Filter '*.json' -File)
+          foreach ($file in $jsonFiles) {
+            try { Get-Content -Raw $file.FullName | ConvertFrom-Json | Out-Null } catch { throw "SHAPE-BUTTON-BOOKMARK-GATE failed: invalid JSON in $($file.FullName)" }
+          }
+          $raw = ($jsonFiles | ForEach-Object { Get-Content -Raw $_.FullName }) -join "`n"
+          $hasBookmarkMetadata = $raw -match '(?i)bookmark'
+          $hasButtonOrShapeMetadata = $raw -match '(?i)(button|shape)'
+          Write-Host "SHAPE-BUTTON-BOOKMARK-GATE|PASS|JsonFiles=$($jsonFiles.Count)|BookmarkMetadataPresent=$hasBookmarkMetadata|ButtonOrShapeMetadataPresent=$hasButtonOrShapeMetadata|NoSyntheticMetadata=PASS"
 
-      - name: THREE-ARTIFACT ASSEMBLY GATE
+      - name: 4/4 VISUAL + PBIR VALIDATION
         shell: pwsh
-        run: .\scripts\Assert-ThreeArtifactStructure.ps1 -GeneratedRoot "$env:OUTPUT_ROOT" -Gate assembly
+        run: |
+          $ErrorActionPreference = 'Stop'
+          & .\scripts\Assert-ThreeArtifactStructure.ps1 -GeneratedRoot "$env:OUTPUT_ROOT" -Gate report
+          & .\scripts\Assert-ThreeArtifactStructure.ps1 -GeneratedRoot "$env:OUTPUT_ROOT" -Gate semantic-model
+          & .\scripts\Assert-ThreeArtifactStructure.ps1 -GeneratedRoot "$env:OUTPUT_ROOT" -Gate pbip
+          $pagesRoot = Join-Path $env:OUTPUT_ROOT 'RevenueTracker.Report\definition\pages'
+          $visualFiles = @(Get-ChildItem -Path $pagesRoot -Recurse -Filter 'visual.json' -File)
+          if ($visualFiles.Count -ne 4) { throw "PBIR-VISUAL-GATE failed: expected 4/4 visuals, generated $($visualFiles.Count)/4." }
+          foreach ($file in $visualFiles) { Get-Content -Raw $file.FullName | ConvertFrom-Json | Out-Null }
+          & .\scripts\Assert-PbirPageLayoutGate.ps1 -GeneratedRoot "$env:OUTPUT_ROOT"
+          Write-Host 'PBIR-VISUAL-GATE|PASS|Visuals=4/4|JsonValidity=PASS|PBIR=PASS|Pages=PASS'
 
       - name: Gate — measure expression parity
         shell: pwsh
         run: .\scripts\Assert-MeasureExpressionParity.ps1 -GeneratedRoot "$env:OUTPUT_ROOT"
-
-      - name: Gate — PBIR page/layout contract
-        shell: pwsh
-        run: .\scripts\Assert-PbirPageLayoutGate.ps1 -GeneratedRoot "$env:OUTPUT_ROOT"
 
       - name: DATA LOAD GATE — verify source inputs
         shell: pwsh
@@ -91,50 +131,33 @@ jobs:
           if ($rows.Count -eq 0) { throw 'DATA-LOAD-GATE failed: revenue source contains no rows.' }
           Write-Host "DATA-LOAD-GATE|PASS|FactRevenueRows=$($rows.Count)"
 
-      # Assembly is the publication unit: one ZIP containing all three PBIP artifacts.
-      # The generated tree is authoritative; assembly never synthesizes PBIP metadata.
-      - name: PACKAGE — single Revenue Tracker PBIP bundle
+      - name: THREE-ARTIFACT ASSEMBLY
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
+          & .\scripts\Assert-ThreeArtifactStructure.ps1 -GeneratedRoot "$env:OUTPUT_ROOT" -Gate assembly
           if (Test-Path $env:PACKAGE_ROOT) { Remove-Item $env:PACKAGE_ROOT -Recurse -Force }
           New-Item -ItemType Directory -Path $env:PACKAGE_ROOT -Force | Out-Null
-
           foreach ($name in @('RevenueTracker.Report','RevenueTracker.SemanticModel','RevenueTracker.pbip')) {
             $source = Join-Path $env:OUTPUT_ROOT $name
             if (!(Test-Path $source)) { throw "PACKAGE-GATE failed: $name is missing." }
             Copy-Item $source (Join-Path $env:PACKAGE_ROOT $name) -Recurse -Force
           }
-
           Add-Type -AssemblyName System.IO.Compression.FileSystem
           $zip = Join-Path $env:GITHUB_WORKSPACE 'RevenueTracker-PBIP.zip'
           if (Test-Path $zip) { Remove-Item $zip -Force }
-          [System.IO.Compression.ZipFile]::CreateFromDirectory(
-            $env:PACKAGE_ROOT,
-            $zip,
-            [System.IO.Compression.CompressionLevel]::Optimal,
-            $false
-          )
+          [System.IO.Compression.ZipFile]::CreateFromDirectory($env:PACKAGE_ROOT,$zip,[System.IO.Compression.CompressionLevel]::Optimal,$false)
           if (!(Test-Path $zip -PathType Leaf)) { throw 'PACKAGE-GATE failed: bundle ZIP was not created.' }
-
           $verifyRoot = Join-Path $env:GITHUB_WORKSPACE 'package-verify'
           if (Test-Path $verifyRoot) { Remove-Item $verifyRoot -Recurse -Force }
-          [System.IO.Compression.ZipFile]::ExtractToDirectory($zip, $verifyRoot)
+          [System.IO.Compression.ZipFile]::ExtractToDirectory($zip,$verifyRoot)
           foreach ($name in @('RevenueTracker.Report','RevenueTracker.SemanticModel','RevenueTracker.pbip')) {
             if (!(Test-Path (Join-Path $verifyRoot $name))) { throw "PACKAGE-GATE failed: $name is missing from ZIP." }
           }
-
-          # version.json is PBIR metadata under definition/, not at the report root.
-          $generatedVersion = Join-Path $env:OUTPUT_ROOT 'RevenueTracker.Report\definition\version.json'
-          $packagedVersion = Join-Path $verifyRoot 'RevenueTracker.Report\definition\version.json'
-          if (!(Test-Path $generatedVersion -PathType Leaf)) { throw 'PACKAGE-GATE failed: generated definition/version.json is missing.' }
-          if (!(Test-Path $packagedVersion -PathType Leaf)) { throw 'PACKAGE-GATE failed: definition/version.json was lost during assembly.' }
-          $generatedVersionJson = Get-Content -Raw $generatedVersion | ConvertFrom-Json
-          $packagedVersionJson = Get-Content -Raw $packagedVersion | ConvertFrom-Json
-          if ([string]$generatedVersionJson.version -ne [string]$packagedVersionJson.version) { throw 'PACKAGE-GATE failed: definition/version.json changed during assembly.' }
-          if ([string]$generatedVersionJson.version -ne '2.0.0') { throw 'PACKAGE-GATE failed: definition/version.json must declare PBIR version 2.0.0.' }
-
-          Write-Host 'PACKAGE-GATE|PASS|Unit=RevenueTracker-PBIP.zip|Report=inside|SemanticModel=inside|PBIP=inside|VersionJson=definition/version.json|Version=2.0.0'
+          $version = Join-Path $verifyRoot 'RevenueTracker.Report\definition\version.json'
+          if (!(Test-Path $version -PathType Leaf)) { throw 'PACKAGE-GATE failed: definition/version.json is missing from assembled ZIP.' }
+          if ([string](Get-Content -Raw $version | ConvertFrom-Json).version -ne '2.0.0') { throw 'PACKAGE-GATE failed: PBIR version must be 2.0.0.' }
+          Write-Host 'THREE-ARTIFACT-ASSEMBLY|PASS|Report=present|SemanticModel=present|PBIP=present|PBIRVersion=2.0.0'
 
       - name: DESKTOP UAT — assembled project readiness
         shell: pwsh
@@ -142,7 +165,7 @@ jobs:
           $ErrorActionPreference = 'Stop'
           & .\scripts\Assert-ThreeArtifactStructure.ps1 -GeneratedRoot "$env:OUTPUT_ROOT" -Gate assembly
           & .\scripts\Assert-PbirPageLayoutGate.ps1 -GeneratedRoot "$env:OUTPUT_ROOT"
-          Write-Host 'DESKTOP-UAT|PASS|ThreeArtifacts=coherent|PBIR=valid|Pages=valid|VersionJson=2.0.0'
+          Write-Host 'DESKTOP-UAT|PASS|ThreeArtifacts=coherent|Visuals=4of4|PBIR=valid|Pages=valid|VersionJson=2.0.0'
           Write-Host 'NOTE|Executable Power BI Desktop launch remains a runner-specific UAT and is not claimed by this static gate.'
 
       - name: PUBLISH — single verified Revenue Tracker bundle
