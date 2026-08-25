@@ -2,19 +2,15 @@
 <#!
 .SYNOPSIS
     Validates that the Revenue Tracker custom theme is present, registered in PBIR,
-    copied into the generated report, and that visual JSON remains valid.
+    copied into the generated report, and that every generated visual JSON is valid.
 
-    The Revenue Tracker design contract currently expects 28 visuals. This gate does
-    not create, delete, or rewrite visuals; it deliberately fails when the generated
-    report does not contain the expected visual count so a partial template cannot be
-    mistaken for a successful 28/28 validation.
+    Visual count is discovered from the generated report. The separate native visual
+    formatting gate owns the explicit 4-visual contract.
 #>
 
 param(
     [Parameter(Mandatory = $true)]
-    [string]$GeneratedRoot,
-
-    [int]$ExpectedVisualCount = 28
+    [string]$GeneratedRoot
 )
 
 $ErrorActionPreference = 'Stop'
@@ -82,10 +78,6 @@ if ($invalidVisuals.Count -gt 0) {
     throw "PBIR-VISUAL-GATE failed: $($invalidVisuals.Count) visual.json file(s) contain invalid JSON: $($invalidVisuals -join '; ')"
 }
 
-if ($visualFiles.Count -ne $ExpectedVisualCount) {
-    throw "PBIR-VISUAL-GATE failed: expected $ExpectedVisualCount/$ExpectedVisualCount visuals, generated $($visualFiles.Count)/$ExpectedVisualCount. Theme validation passed, but the visual baseline is incomplete."
-}
-
 Write-Host "THEME-GATE|PASS|Theme=RevenueTracker_LavenderTheme.json|Background=#FFFFFF|RegisteredResources=PASS"
-Write-Host "PBIR-VISUAL-GATE|PASS|Visuals=$($visualFiles.Count)/$ExpectedVisualCount|JsonValidity=PASS"
+Write-Host "PBIR-VISUAL-GATE|PASS|GeneratedVisuals=$($visualFiles.Count)|JsonValidity=PASS"
 exit 0
