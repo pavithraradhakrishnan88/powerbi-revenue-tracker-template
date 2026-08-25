@@ -1,88 +1,10 @@
 {
   "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.3.0/schema.json",
   "name": "LineRevenueTrend",
-  "position": {
-    "x": 612,
-    "y": 156,
-    "z": 3000,
-    "width": 636,
-    "height": 220,
-    "tabOrder": 3000
-  },
+  "position": { "x": 612, "y": 156, "z": 3000, "width": 636, "height": 220, "tabOrder": 3000 },
   "visual": {
-    "visualType": "lineChart",
-    "query": {
-      "queryState": {
-        "Category": {
-          "projections": [
-            {
-              "field": {
-                "Column": {
-                  "Expression": {
-                    "SourceRef": {
-                      "Entity": "Dim_Date"
-                    }
-                  },
-                  "Property": "MonthYear"
-                }
-              },
-              "queryRef": "Dim_Date.MonthYear",
-              "nativeQueryRef": "MonthYear"
-            }
-          ]
-        },
-        "Y": {
-          "projections": [
-            {
-              "field": {
-                "Measure": {
-                  "Expression": {
-                    "SourceRef": {
-                      "Entity": "Fact_Revenue"
-                    }
-                  },
-                  "Property": "Total Revenue"
-                }
-              },
-              "queryRef": "Fact_Revenue.Total Revenue",
-              "nativeQueryRef": "Total Revenue"
-            }
-          ]
-        }
-      }
-    },
-    "objects": {
-      "title": [
-        {
-          "properties": {
-            "text": {
-              "expr": {
-                "Literal": {
-                  "Value": "'Revenue Trend'"
-                }
-              }
-            },
-            "show": {
-              "expr": {
-                "Literal": {
-                  "Value": "true"
-                }
-              }
-            }
-          }
-        }
-      ],
-      "dataPoint": [
-        {
-          "properties": {
-            "defaultColor": {
-              "solid": {
-                "color": "#F0629B"
-              }
-            }
-          }
-        }
-      ]
-    }
+    "visualType": "htmlContent443BE3AD55E043BF878BED274D3A6865",
+    "query": { "queryState": { "content": { "projections": [{ "field": { "Measure": { "Expression": { "SourceRef": { "Entity": "Fact_Revenue" } }, "Property": "RevenueTrendHtml" } }, "queryRef": "Fact_Revenue.RevenueTrendHtml", "nativeQueryRef": "RevenueTrendHtml" }] } } },
+    "objects": { "contentFormatting": [{ "properties": { "format": { "expr": { "Literal": { "Value": "'html'" } } }, "hyperlinks": { "expr": { "Literal": { "Value": "true" } } }, "fontFamily": { "expr": { "Literal": { "Value": "'Segoe UI'" } } }, "fontSize": { "expr": { "Literal": { "Value": "12D" } } } } }] }
   }
 }
