@@ -1,77 +1,10 @@
 {
   "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.3.0/schema.json",
   "name": "CardTotalRevenue",
-  "position": {
-    "x": 32,
-    "y": 156,
-    "z": 1000,
-    "width": 340,
-    "height": 220,
-    "tabOrder": 1000
-  },
+  "position": { "x": 32, "y": 156, "z": 1000, "width": 340, "height": 220, "tabOrder": 1000 },
   "visual": {
-    "visualType": "card",
-    "query": {
-      "queryState": {
-        "Values": {
-          "projections": [
-            {
-              "field": {
-                "Measure": {
-                  "Expression": {
-                    "SourceRef": {
-                      "Entity": "Fact_Revenue"
-                    }
-                  },
-                  "Property": "Total Revenue"
-                }
-              },
-              "queryRef": "Fact_Revenue.Total Revenue",
-              "nativeQueryRef": "Total Revenue"
-            }
-          ]
-        }
-      }
-    },
-    "objects": {
-      "title": [
-        {
-          "properties": {
-            "text": {
-              "expr": {
-                "Literal": {
-                  "Value": "'Total Revenue'"
-                }
-              }
-            },
-            "show": {
-              "expr": {
-                "Literal": {
-                  "Value": "true"
-                }
-              }
-            }
-          }
-        }
-      ],
-      "labels": [
-        {
-          "properties": {
-            "fontSize": {
-              "expr": {
-                "Literal": {
-                  "Value": "32D"
-                }
-              }
-            },
-            "color": {
-              "solid": {
-                "color": "#1F1B2E"
-              }
-            }
-          }
-        }
-      ]
-    }
+    "visualType": "htmlContent443BE3AD55E043BF878BED274D3A6865",
+    "query": { "queryState": { "content": { "projections": [{ "field": { "Measure": { "Expression": { "SourceRef": { "Entity": "Fact_Revenue" } }, "Property": "RevenueKpiHtml" } }, "queryRef": "Fact_Revenue.RevenueKpiHtml", "nativeQueryRef": "RevenueKpiHtml" }] } } },
+    "objects": { "contentFormatting": [{ "properties": { "format": { "expr": { "Literal": { "Value": "'html'" } } }, "hyperlinks": { "expr": { "Literal": { "Value": "true" } } }, "fontFamily": { "expr": { "Literal": { "Value": "'Segoe UI'" } } }, "fontSize": { "expr": { "Literal": { "Value": "12D" } } } } }] }
   }
 }
