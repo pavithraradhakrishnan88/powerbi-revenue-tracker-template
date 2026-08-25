@@ -2,11 +2,11 @@
   "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.3.0/schema.json",
   "name": "LineRevenueTrend",
   "position": {
-    "x": 640,
-    "y": 160,
+    "x": 612,
+    "y": 156,
     "z": 3000,
-    "width": 620,
-    "height": 280,
+    "width": 636,
+    "height": 220,
     "tabOrder": 3000
   },
   "visual": {
@@ -51,6 +51,31 @@
         }
       }
     },
-    "objects": {}
+    "objects": {
+      "dataPoint": [
+        {
+          "properties": {
+            "defaultColor": {
+              "solid": {
+                "color": "#F0629B"
+              }
+            }
+          }
+        }
+      ],
+      "lineStyles": [
+        {
+          "properties": {
+            "strokeWidth": {
+              "expr": {
+                "Literal": {
+                  "Value": "3D"
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
   }
 }
