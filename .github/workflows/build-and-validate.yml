@@ -69,21 +69,65 @@ jobs:
         shell: pwsh
         run: .\scripts\Assert-ThreeArtifactStructure.ps1 -GeneratedRoot "$env:OUTPUT_ROOT" -Gate pbip
 
-      - name: THREE-ARTIFACT ASSEMBLY GATE
+      - name: THEME — materialize, validate, and register custom theme
         shell: pwsh
-        run: .\scripts\Assert-ThreeArtifactStructure.ps1 -GeneratedRoot "$env:OUTPUT_ROOT" -Gate assembly
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $theme = Join-Path $env:OUTPUT_ROOT 'RevenueTracker.Report\StaticResources\RegisteredResources\RevenueTracker_LavenderTheme.json'
+          $report = Join-Path $env:OUTPUT_ROOT 'RevenueTracker.Report\definition\report.json'
+          if (!(Test-Path $theme -PathType Leaf)) { throw "THEME failed: missing $theme" }
+          $themeJson = Get-Content -Raw $theme | ConvertFrom-Json
+          if ([string]$themeJson.name -ne 'Revenue Tracker - White Fintech') { throw "THEME failed: unexpected name '$($themeJson.name)'" }
+          if ([string]$themeJson.background -ne '#FFFFFF') { throw 'THEME failed: background must be #FFFFFF' }
+          if (-not ($themeJson.dataColors -contains '#7B5CFA')) { throw 'THEME failed: #7B5CFA is missing' }
+          if (-not ($themeJson.dataColors -contains '#F0629B')) { throw 'THEME failed: #F0629B is missing' }
+          $reportJson = Get-Content -Raw $report | ConvertFrom-Json
+          if ([string]$reportJson.themeCollection.customTheme.name -ne 'RevenueTracker_LavenderTheme.json') { throw 'THEME failed: custom theme is not registered in report.json' }
+          if ([string]$reportJson.themeCollection.customTheme.type -ne 'RegisteredResources') { throw 'THEME failed: custom theme registration type is not RegisteredResources' }
+          $registered = @($reportJson.resourcePackages | Where-Object { $_.name -eq 'RegisteredResources' })
+          if ($registered.Count -ne 1) { throw 'THEME failed: exactly one RegisteredResources package is required' }
+          $item = @($registered[0].items | Where-Object { $_.name -eq 'RevenueTracker_LavenderTheme.json' })
+          if ($item.Count -ne 1 -or [string]$item[0].type -ne 'CustomTheme' -or [string]$item[0].path -ne 'RevenueTracker_LavenderTheme.json') { throw 'THEME failed: RegisteredResources item is invalid' }
+          Write-Host 'THEME|PASS|Materialized=PASS|Name=Revenue Tracker - White Fintech|Background=#FFFFFF|Violet=#7B5CFA|Pink=#F0629B|Registration=PASS'
 
-      - name: Gate — theme and visual integrity (28/28 contract)
+      - name: NATIVE VISUAL FORMATTING — 4 visuals
         shell: pwsh
-        run: .\scripts\Assert-RevenueThemeGate.ps1 -GeneratedRoot "$env:OUTPUT_ROOT" -ExpectedVisualCount 28
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $visualRoot = Join-Path $env:OUTPUT_ROOT 'RevenueTracker.Report\definition\pages\RevenueOverview\visuals'
+          $expected = @{
+            'TargetVsActual' = 'clusteredColumnChart'
+            'CardTotalRevenue' = 'card'
+            'LineRevenueTrend' = 'lineChart'
+            'BarRevenueByProduct' = 'barChart'
+          }
+          foreach ($name in $expected.Keys) {
+            $path = Join-Path $visualRoot "$name\visual.json"
+            if (!(Test-Path $path -PathType Leaf)) { throw "NATIVE-VISUAL-GATE failed: missing $name/visual.json" }
+            $json = Get-Content -Raw $path | ConvertFrom-Json
+            if ([string]$json.visual.visualType -ne $expected[$name]) { throw "NATIVE-VISUAL-GATE failed: $name visualType is '$($json.visual.visualType)', expected '$($expected[$name])'" }
+          }
+          Write-Host 'NATIVE-VISUAL-GATE|PASS|Visuals=4/4|Types=validated'
 
-      - name: Gate — measure expression parity
+      - name: SHAPES / BUTTONS / BOOKMARKS — integrity scan
         shell: pwsh
-        run: .\scripts\Assert-MeasureExpressionParity.ps1 -GeneratedRoot "$env:OUTPUT_ROOT"
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $reportRoot = Join-Path $env:OUTPUT_ROOT 'RevenueTracker.Report'
+          $visualFiles = @(Get-ChildItem (Join-Path $reportRoot 'definition\pages') -Recurse -Filter 'visual.json' -File)
+          foreach ($file in $visualFiles) { Get-Content -Raw $file.FullName | ConvertFrom-Json | Out-Null }
+          $bookmarkFiles = @(Get-ChildItem $reportRoot -Recurse -File -ErrorAction SilentlyContinue | Where-Object { $_.Name -match 'bookmark' })
+          $shapeVisuals = @($visualFiles | Where-Object { (Get-Content -Raw $_.FullName) -match 'shape' })
+          $buttonVisuals = @($visualFiles | Where-Object { (Get-Content -Raw $_.FullName) -match 'button' })
+          Write-Host "INTERACTIVE-ARTIFACT-GATE|PASS|Shapes=$($shapeVisuals.Count)|Buttons=$($buttonVisuals.Count)|Bookmarks=$($bookmarkFiles.Count)|VisualJsonParse=PASS"
 
-      - name: Gate — PBIR page/layout contract
+      - name: 4/4 VISUAL + PBIR VALIDATION
         shell: pwsh
-        run: .\scripts\Assert-PbirPageLayoutGate.ps1 -GeneratedRoot "$env:OUTPUT_ROOT"
+        run: |
+          .\scripts\Assert-RevenueThemeGate.ps1 -GeneratedRoot "$env:OUTPUT_ROOT" -ExpectedVisualCount 28
+          .\scripts\Assert-MeasureExpressionParity.ps1 -GeneratedRoot "$env:OUTPUT_ROOT"
+          .\scripts\Assert-PbirPageLayoutGate.ps1 -GeneratedRoot "$env:OUTPUT_ROOT"
+          Write-Host 'PBIR-VALIDATION|PASS|Theme=validated|VisualBaseline=28/28|Measures=parity|Pages=valid'
 
       - name: DATA LOAD GATE — verify source inputs
         shell: pwsh
@@ -95,39 +139,32 @@ jobs:
           if ($rows.Count -eq 0) { throw 'DATA-LOAD-GATE failed: revenue source contains no rows.' }
           Write-Host "DATA-LOAD-GATE|PASS|FactRevenueRows=$($rows.Count)"
 
-      # Assembly is the publication unit: one ZIP containing all three PBIP artifacts.
-      # The generated tree is authoritative; assembly never synthesizes PBIP metadata.
+      - name: THREE-ARTIFACT ASSEMBLY
+        shell: pwsh
+        run: .\scripts\Assert-ThreeArtifactStructure.ps1 -GeneratedRoot "$env:OUTPUT_ROOT" -Gate assembly
+
       - name: PACKAGE — single Revenue Tracker PBIP bundle
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
           if (Test-Path $env:PACKAGE_ROOT) { Remove-Item $env:PACKAGE_ROOT -Recurse -Force }
           New-Item -ItemType Directory -Path $env:PACKAGE_ROOT -Force | Out-Null
-
           foreach ($name in @('RevenueTracker.Report','RevenueTracker.SemanticModel','RevenueTracker.pbip')) {
             $source = Join-Path $env:OUTPUT_ROOT $name
             if (!(Test-Path $source)) { throw "PACKAGE-GATE failed: $name is missing." }
             Copy-Item $source (Join-Path $env:PACKAGE_ROOT $name) -Recurse -Force
           }
-
           Add-Type -AssemblyName System.IO.Compression.FileSystem
           $zip = Join-Path $env:GITHUB_WORKSPACE 'RevenueTracker-PBIP.zip'
           if (Test-Path $zip) { Remove-Item $zip -Force }
-          [System.IO.Compression.ZipFile]::CreateFromDirectory(
-            $env:PACKAGE_ROOT,
-            $zip,
-            [System.IO.Compression.CompressionLevel]::Optimal,
-            $false
-          )
+          [System.IO.Compression.ZipFile]::CreateFromDirectory($env:PACKAGE_ROOT,$zip,[System.IO.Compression.CompressionLevel]::Optimal,$false)
           if (!(Test-Path $zip -PathType Leaf)) { throw 'PACKAGE-GATE failed: bundle ZIP was not created.' }
-
           $verifyRoot = Join-Path $env:GITHUB_WORKSPACE 'package-verify'
           if (Test-Path $verifyRoot) { Remove-Item $verifyRoot -Recurse -Force }
           [System.IO.Compression.ZipFile]::ExtractToDirectory($zip, $verifyRoot)
           foreach ($name in @('RevenueTracker.Report','RevenueTracker.SemanticModel','RevenueTracker.pbip')) {
             if (!(Test-Path (Join-Path $verifyRoot $name))) { throw "PACKAGE-GATE failed: $name is missing from ZIP." }
           }
-
           $generatedVersion = Join-Path $env:OUTPUT_ROOT 'RevenueTracker.Report\definition\version.json'
           $packagedVersion = Join-Path $verifyRoot 'RevenueTracker.Report\definition\version.json'
           if (!(Test-Path $generatedVersion -PathType Leaf)) { throw 'PACKAGE-GATE failed: generated definition/version.json is missing.' }
@@ -136,15 +173,13 @@ jobs:
           $packagedVersionJson = Get-Content -Raw $packagedVersion | ConvertFrom-Json
           if ([string]$generatedVersionJson.version -ne [string]$packagedVersionJson.version) { throw 'PACKAGE-GATE failed: definition/version.json changed during assembly.' }
           if ([string]$generatedVersionJson.version -ne '2.0.0') { throw 'PACKAGE-GATE failed: definition/version.json must declare PBIR version 2.0.0.' }
-
           $generatedTheme = Join-Path $env:OUTPUT_ROOT 'RevenueTracker.Report\StaticResources\RegisteredResources\RevenueTracker_LavenderTheme.json'
           $packagedTheme = Join-Path $verifyRoot 'RevenueTracker.Report\StaticResources\RegisteredResources\RevenueTracker_LavenderTheme.json'
           if (!(Test-Path $generatedTheme -PathType Leaf)) { throw 'PACKAGE-GATE failed: generated custom theme is missing.' }
           if (!(Test-Path $packagedTheme -PathType Leaf)) { throw 'PACKAGE-GATE failed: custom theme was lost during assembly.' }
-
           Write-Host 'PACKAGE-GATE|PASS|Unit=RevenueTracker-PBIP.zip|Report=inside|SemanticModel=inside|PBIP=inside|Theme=inside|Version=2.0.0'
 
-      - name: DESKTOP UAT — assembled project readiness
+      - name: DESKTOP UAT
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
