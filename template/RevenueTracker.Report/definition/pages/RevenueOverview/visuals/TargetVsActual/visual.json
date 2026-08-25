@@ -2,11 +2,11 @@
   "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.3.0/schema.json",
   "name": "TargetVsActual",
   "position": {
-    "x": 640,
-    "y": 460,
+    "x": 612,
+    "y": 396,
     "z": 4000,
-    "width": 620,
-    "height": 220,
+    "width": 636,
+    "height": 292,
     "tabOrder": 4000
   },
   "visual": {
@@ -65,6 +65,18 @@
         }
       }
     },
-    "objects": {}
+    "objects": {
+      "dataPoint": [
+        {
+          "properties": {
+            "defaultColor": {
+              "solid": {
+                "color": "#7B5CFA"
+              }
+            }
+          }
+        }
+      ]
+    }
   }
 }
