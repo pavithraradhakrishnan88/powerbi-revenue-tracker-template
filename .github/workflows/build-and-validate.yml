@@ -92,10 +92,7 @@ jobs:
           Write-Host "DATA-LOAD-GATE|PASS|FactRevenueRows=$($rows.Count)"
 
       # Assembly is the publication unit: one ZIP containing all three PBIP artifacts.
-      # Do not synthesize PBIP metadata here. The generated tree is authoritative.
-      # In particular, version.json is copied only if it actually exists in the generated
-      # template tree. The template currently has no version.json, so the package must not
-      # manufacture one just to satisfy a downstream check.
+      # The generated tree is authoritative; assembly never synthesizes PBIP metadata.
       - name: PACKAGE — single Revenue Tracker PBIP bundle
         shell: pwsh
         run: |
@@ -109,9 +106,6 @@ jobs:
             Copy-Item $source (Join-Path $env:PACKAGE_ROOT $name) -Recurse -Force
           }
 
-          # Compress-Archive is deliberately not used: it can omit hidden PBIP files such
-          # as .platform. Use the .NET ZipFile implementation so the assembled ZIP is a
-          # faithful copy of the generated three-artifact tree.
           Add-Type -AssemblyName System.IO.Compression.FileSystem
           $zip = Join-Path $env:GITHUB_WORKSPACE 'RevenueTracker-PBIP.zip'
           if (Test-Path $zip) { Remove-Item $zip -Force }
@@ -123,8 +117,6 @@ jobs:
           )
           if (!(Test-Path $zip -PathType Leaf)) { throw 'PACKAGE-GATE failed: bundle ZIP was not created.' }
 
-          # Re-extract the package and assert the three-artifact boundary plus hidden
-          # metadata parity. This catches assembly loss without inventing any file.
           $verifyRoot = Join-Path $env:GITHUB_WORKSPACE 'package-verify'
           if (Test-Path $verifyRoot) { Remove-Item $verifyRoot -Recurse -Force }
           [System.IO.Compression.ZipFile]::ExtractToDirectory($zip, $verifyRoot)
@@ -132,16 +124,17 @@ jobs:
             if (!(Test-Path (Join-Path $verifyRoot $name))) { throw "PACKAGE-GATE failed: $name is missing from ZIP." }
           }
 
-          $generatedVersion = Join-Path $env:OUTPUT_ROOT 'RevenueTracker.Report\version.json'
-          $packagedVersion = Join-Path $verifyRoot 'RevenueTracker.Report\version.json'
-          if ((Test-Path $generatedVersion) -and !(Test-Path $packagedVersion)) {
-            throw 'PACKAGE-GATE failed: generated version.json was lost during assembly.'
-          }
-          if (!(Test-Path $generatedVersion) -and (Test-Path $packagedVersion)) {
-            throw 'PACKAGE-GATE failed: assembly fabricated version.json.'
-          }
+          # version.json is PBIR metadata under definition/, not at the report root.
+          $generatedVersion = Join-Path $env:OUTPUT_ROOT 'RevenueTracker.Report\definition\version.json'
+          $packagedVersion = Join-Path $verifyRoot 'RevenueTracker.Report\definition\version.json'
+          if (!(Test-Path $generatedVersion -PathType Leaf)) { throw 'PACKAGE-GATE failed: generated definition/version.json is missing.' }
+          if (!(Test-Path $packagedVersion -PathType Leaf)) { throw 'PACKAGE-GATE failed: definition/version.json was lost during assembly.' }
+          $generatedVersionJson = Get-Content -Raw $generatedVersion | ConvertFrom-Json
+          $packagedVersionJson = Get-Content -Raw $packagedVersion | ConvertFrom-Json
+          if ([string]$generatedVersionJson.version -ne [string]$packagedVersionJson.version) { throw 'PACKAGE-GATE failed: definition/version.json changed during assembly.' }
+          if ([string]$generatedVersionJson.version -ne '2.0.0') { throw 'PACKAGE-GATE failed: definition/version.json must declare PBIR version 2.0.0.' }
 
-          Write-Host "PACKAGE-GATE|PASS|Unit=RevenueTracker-PBIP.zip|Report=inside|SemanticModel=inside|PBIP=inside|VersionJson=$([bool](Test-Path $generatedVersion))"
+          Write-Host 'PACKAGE-GATE|PASS|Unit=RevenueTracker-PBIP.zip|Report=inside|SemanticModel=inside|PBIP=inside|VersionJson=definition/version.json|Version=2.0.0'
 
       - name: DESKTOP UAT — assembled project readiness
         shell: pwsh
@@ -149,10 +142,9 @@ jobs:
           $ErrorActionPreference = 'Stop'
           & .\scripts\Assert-ThreeArtifactStructure.ps1 -GeneratedRoot "$env:OUTPUT_ROOT" -Gate assembly
           & .\scripts\Assert-PbirPageLayoutGate.ps1 -GeneratedRoot "$env:OUTPUT_ROOT"
-          Write-Host 'DESKTOP-UAT|PASS|ThreeArtifacts=coherent|PBIR=valid|Pages=valid'
+          Write-Host 'DESKTOP-UAT|PASS|ThreeArtifacts=coherent|PBIR=valid|Pages=valid|VersionJson=2.0.0'
           Write-Host 'NOTE|Executable Power BI Desktop launch remains a runner-specific UAT and is not claimed by this static gate.'
 
-      # ONE publication unit only. The three artifacts remain together inside the ZIP.
       - name: PUBLISH — single verified Revenue Tracker bundle
         if: success()
         uses: actions/upload-artifact@v4
