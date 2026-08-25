@@ -24,6 +24,7 @@ jobs:
       TEMPLATE_ROOT: ${{ github.workspace }}\template
       DATA_ROOT: ${{ github.workspace }}\data
       OUTPUT_ROOT: ${{ github.workspace }}\generated
+      PACKAGE_ROOT: ${{ github.workspace }}\package
 
     steps:
       - name: GENERATE — authoritative Revenue Tracker PBIP
@@ -56,7 +57,6 @@ jobs:
             "$env:TEMPLATE_ROOT" "$env:DATA_ROOT" "$env:OUTPUT_ROOT"
           if ($LASTEXITCODE -ne 0) { throw "Orchestrator failed with exit code $LASTEXITCODE" }
 
-      # THREE STRUCTURAL GATES — each artifact is independently validated before assembly.
       - name: STRUCTURAL GATE 1 — Report
         shell: pwsh
         run: .\scripts\Assert-ThreeArtifactStructure.ps1 -GeneratedRoot "$env:OUTPUT_ROOT" -Gate report
@@ -69,7 +69,6 @@ jobs:
         shell: pwsh
         run: .\scripts\Assert-ThreeArtifactStructure.ps1 -GeneratedRoot "$env:OUTPUT_ROOT" -Gate pbip
 
-      # THREE-ARTIFACT ASSEMBLY GATE — report + semantic model + .pbip must be coherent.
       - name: THREE-ARTIFACT ASSEMBLY GATE
         shell: pwsh
         run: .\scripts\Assert-ThreeArtifactStructure.ps1 -GeneratedRoot "$env:OUTPUT_ROOT" -Gate assembly
@@ -82,7 +81,6 @@ jobs:
         shell: pwsh
         run: .\scripts\Assert-PbirPageLayoutGate.ps1 -GeneratedRoot "$env:OUTPUT_ROOT"
 
-      # Data UAT occurs against the generated artifact set before publication.
       - name: DATA LOAD GATE — verify source inputs
         shell: pwsh
         run: |
@@ -93,14 +91,27 @@ jobs:
           if ($rows.Count -eq 0) { throw 'DATA-LOAD-GATE failed: revenue source contains no rows.' }
           Write-Host "DATA-LOAD-GATE|PASS|FactRevenueRows=$($rows.Count)"
 
-      - name: Artifact parity gate — generated three-artifact set
+      # Assembly is the publication unit: one ZIP containing all three PBIP artifacts.
+      # The individual directories are never uploaded as separate GitHub artifacts.
+      - name: PACKAGE — single Revenue Tracker PBIP bundle
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
+          if (Test-Path $env:PACKAGE_ROOT) { Remove-Item $env:PACKAGE_ROOT -Recurse -Force }
+          New-Item -ItemType Directory -Path $env:PACKAGE_ROOT -Force | Out-Null
           foreach ($name in @('RevenueTracker.Report','RevenueTracker.SemanticModel','RevenueTracker.pbip')) {
-            if (!(Test-Path (Join-Path $env:OUTPUT_ROOT $name))) { throw "ARTIFACT-PARITY-GATE failed: $name is missing." }
+            $source = Join-Path $env:OUTPUT_ROOT $name
+            if (!(Test-Path $source)) { throw "PACKAGE-GATE failed: $name is missing." }
+            Copy-Item $source (Join-Path $env:PACKAGE_ROOT $name) -Recurse -Force
           }
-          Write-Host 'ARTIFACT-PARITY-GATE|PASS|Report=present|SemanticModel=present|PBIP=present'
+          $zip = Join-Path $env:PACKAGE_ROOT 'RevenueTracker-PBIP.zip'
+          Compress-Archive -Path @(
+            (Join-Path $env:PACKAGE_ROOT 'RevenueTracker.Report'),
+            (Join-Path $env:PACKAGE_ROOT 'RevenueTracker.SemanticModel'),
+            (Join-Path $env:PACKAGE_ROOT 'RevenueTracker.pbip')
+          ) -DestinationPath $zip -Force
+          if (!(Test-Path $zip -PathType Leaf)) { throw 'PACKAGE-GATE failed: bundle ZIP was not created.' }
+          Write-Host 'PACKAGE-GATE|PASS|Unit=RevenueTracker-PBIP.zip|Report=inside|SemanticModel=inside|PBIP=inside'
 
       - name: DESKTOP UAT — assembled project readiness
         shell: pwsh
@@ -111,33 +122,13 @@ jobs:
           Write-Host 'DESKTOP-UAT|PASS|ThreeArtifacts=coherent|PBIR=valid|Pages=valid'
           Write-Host 'NOTE|Executable Power BI Desktop launch remains a runner-specific UAT and is not claimed by this static gate.'
 
-      # PUBLISH — deliberately last. No artifact upload occurs before all gates/UAT pass.
-      - name: PUBLISH — verified Revenue Tracker artifacts
+      # ONE publication unit only. The three artifacts remain together inside the ZIP.
+      - name: PUBLISH — single verified Revenue Tracker bundle
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: RevenueTracker.Report
-          path: ${{ github.workspace }}\generated\RevenueTracker.Report
-          include-hidden-files: true
-          if-no-files-found: error
-          retention-days: 30
-
-      - name: PUBLISH — verified semantic model
-        if: success()
-        uses: actions/upload-artifact@v4
-        with:
-          name: RevenueTracker.SemanticModel
-          path: ${{ github.workspace }}\generated\RevenueTracker.SemanticModel
-          include-hidden-files: true
-          if-no-files-found: error
-          retention-days: 30
-
-      - name: PUBLISH — verified .pbip project
-        if: success()
-        uses: actions/upload-artifact@v4
-        with:
-          name: RevenueTracker.pbip
-          path: ${{ github.workspace }}\generated\RevenueTracker.pbip
+          name: RevenueTracker-PBIP
+          path: ${{ github.workspace }}\package\RevenueTracker-PBIP.zip
           if-no-files-found: error
           retention-days: 30
 
