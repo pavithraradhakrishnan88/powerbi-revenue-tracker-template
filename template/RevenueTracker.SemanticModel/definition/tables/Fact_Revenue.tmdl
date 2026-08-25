@@ -79,6 +79,9 @@ table Fact_Revenue
 
 		annotation SummarizationSetBy = Automatic
 
+	measure NavigationButtonsHtml = "<div style='display:flex;gap:8px;align-items:center;font-family:Segoe UI,sans-serif;'><a href='?pageName=RevenueOverview' style='display:inline-block;padding:8px 14px;border-radius:10px;background:#7B5CFA;color:#FFFFFF;text-decoration:none;font-weight:600;font-size:12px;box-shadow:0 3px 10px rgba(123,92,250,.18);'>Overview</a><a href='?pageName=Revenue' style='display:inline-block;padding:8px 14px;border-radius:10px;background:#FFFFFF;color:#1F1B2E;text-decoration:none;font-weight:600;font-size:12px;border:1px solid #E6E1F5;box-shadow:0 3px 10px rgba(31,27,46,.08);'>Revenue</a><a href='?pageName=Target' style='display:inline-block;padding:8px 14px;border-radius:10px;background:#FFFFFF;color:#1F1B2E;text-decoration:none;font-weight:600;font-size:12px;border:1px solid #E6E1F5;box-shadow:0 3px 10px rgba(31,27,46,.08);'>Target</a><a href='?pageName=Details' style='display:inline-block;padding:8px 14px;border-radius:10px;background:#FFFFFF;color:#1F1B2E;text-decoration:none;font-weight:600;font-size:12px;border:1px solid #E6E1F5;box-shadow:0 3px 10px rgba(31,27,46,.08);'>Details</a></div>
+		lineageTag = measure-navigation-buttons-html-001
+
 	partition Fact_Revenue = m
 		mode: import
 		source =
