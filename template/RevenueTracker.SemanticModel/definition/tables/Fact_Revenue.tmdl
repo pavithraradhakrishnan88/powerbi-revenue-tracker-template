@@ -79,6 +79,9 @@ table Fact_Revenue
 
 		annotation SummarizationSetBy = Automatic
 
+	measure NavigationHtmlButtons = "RETURN \"<nav data-role='NavigationHtmlButtons' data-navigation-contract='Overview|RevenueOverview;Revenue|Revenue;Target|Target;Details|Details' style='display:flex;gap:8px;align-items:center;padding:10px 12px;background:#fff;border:1px solid #ECEAF6;border-radius:12px;box-shadow:0 2px 12px rgba(216,210,240,.55);font-family:Segoe UI,sans-serif'>\" & \"<a data-label='Overview' data-target='RevenueOverview' href='#RevenueOverview' style='padding:7px 13px;border-radius:999px;background:#7B5CFA;color:#fff;text-decoration:none;font-size:11px'>Overview</a>\" & \"<a data-label='Revenue' data-target='Revenue' href='#Revenue' style='padding:7px 13px;border-radius:999px;background:#fff;color:#1F1B2E;text-decoration:none;font-size:11px;border:1px solid #ECEAF6'>Revenue</a>\" & \"<a data-label='Target' data-target='Target' href='#Target' style='padding:7px 13px;border-radius:999px;background:#fff;color:#1F1B2E;text-decoration:none;font-size:11px;border:1px solid #ECEAF6'>Target</a>\" & \"<a data-label='Details' data-target='Details' href='#Details' style='padding:7px 13px;border-radius:999px;background:#fff;color:#1F1B2E;text-decoration:none;font-size:11px;border:1px solid #ECEAF6'>Details</a>\" & \"</nav>\""
+		lineageTag = measure-navigation-buttons-html-001
+
 	partition Fact_Revenue = m
 		mode: import
 		source =

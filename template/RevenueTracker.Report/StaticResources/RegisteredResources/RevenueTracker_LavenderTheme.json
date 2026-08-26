@@ -1,0 +1,243 @@
+{
+  "name": "Revenue Tracker - White Fintech",
+  "dataColors": [
+    "#7B5CFA",
+    "#F0629B",
+    "#8E5CF7",
+    "#2ED9B8",
+    "#FFB74D",
+    "#5B8DEF",
+    "#E84393",
+    "#B39DFF"
+  ],
+  "background": "#FFFFFF",
+  "foreground": "#1F1B2E",
+  "tableAccent": "#7B5CFA",
+  "good": "#2ED9B8",
+  "neutral": "#FFB74D",
+  "bad": "#F0629B",
+  "textClasses": {
+    "callout": {
+      "fontSize": 32,
+      "fontFace": "Segoe UI Semibold",
+      "color": "#1F1B2E"
+    },
+    "title": {
+      "fontSize": 12,
+      "fontFace": "Segoe UI Semibold",
+      "color": "#1F1B2E"
+    },
+    "header": {
+      "fontSize": 11,
+      "fontFace": "Segoe UI",
+      "color": "#8B879C"
+    },
+    "label": {
+      "fontSize": 10,
+      "fontFace": "Segoe UI",
+      "color": "#8B879C"
+    }
+  },
+  "visualStyles": {
+    "*": {
+      "*": {
+        "background": [
+          {
+            "show": true,
+            "color": {
+              "solid": {
+                "color": "#FFFFFF"
+              }
+            },
+            "transparency": 0
+          }
+        ],
+        "border": [
+          {
+            "show": false
+          }
+        ],
+        "visualHeader": [
+          {
+            "show": true,
+            "background": {
+              "solid": {
+                "color": "#FFFFFF"
+              }
+            },
+            "foreground": {
+              "solid": {
+                "color": "#1F1B2E"
+              }
+            }
+          }
+        ],
+        "dropShadow": [
+          {
+            "show": true,
+            "shadowColor": {
+              "solid": {
+                "color": "#D8D2F0"
+              }
+            },
+            "position": "Outer",
+            "preset": "Custom",
+            "shadowBlur": 12,
+            "shadowDistance": 2,
+            "shadowSpread": 0,
+            "shadowTransparency": 85,
+            "shadowAngle": 90
+          }
+        ],
+        "general": [
+          {
+            "responsive": true
+          }
+        ]
+      }
+    },
+    "card": {
+      "*": {
+        "labels": [
+          {
+            "color": "#1F1B2E",
+            "fontSize": 32,
+            "fontFamily": "Segoe UI Semibold"
+          }
+        ],
+        "categoryLabels": [
+          {
+            "color": "#8B879C",
+            "fontSize": 11,
+            "fontFamily": "Segoe UI"
+          }
+        ]
+      }
+    },
+    "columnChart": {
+      "*": {
+        "dataPoint": [
+          {
+            "defaultColor": {
+              "solid": {
+                "color": "#7B5CFA"
+              }
+            },
+            "showAllDataPoints": false
+          }
+        ]
+      }
+    },
+    "barChart": {
+      "*": {
+        "dataPoint": [
+          {
+            "defaultColor": {
+              "solid": {
+                "color": "#7B5CFA"
+              }
+            },
+            "showAllDataPoints": false
+          }
+        ]
+      }
+    },
+    "lineChart": {
+      "*": {
+        "dataPoint": [
+          {
+            "defaultColor": {
+              "solid": {
+                "color": "#F0629B"
+              }
+            }
+          }
+        ],
+        "line": [
+          {
+            "lineStyle": "solid",
+            "strokeWidth": 3
+          }
+        ]
+      }
+    },
+    "donutChart": {
+      "*": {
+        "dataPoint": [
+          {
+            "defaultColor": {
+              "solid": {
+                "color": "#7B5CFA"
+              }
+            }
+          }
+        ],
+        "slices": [
+          {
+            "innerRadiusRatio": 65
+          }
+        ]
+      }
+    },
+    "gauge": {
+      "*": {
+        "dataPoint": [
+          {
+            "fillColor": {
+              "solid": {
+                "color": "#7B5CFA"
+              }
+            },
+            "targetColor": {
+              "solid": {
+                "color": "#1F1B2E"
+              }
+            }
+          }
+        ]
+      }
+    },
+    "slicer": {
+      "*": {
+        "background": [
+          {
+            "show": true,
+            "color": {
+              "solid": {
+                "color": "#FFFFFF"
+              }
+            }
+          }
+        ],
+        "items": [
+          {
+            "fontColor": {
+              "solid": {
+                "color": "#1F1B2E"
+              }
+            },
+            "background": {
+              "solid": {
+                "color": "#FFFFFF"
+              }
+            }
+          }
+        ]
+      }
+    },
+    "page": {
+      "*": {
+        "background": [
+          {
+            "color": {
+              "solid": {
+                "color": "#FFFFFF"
+              }
+            },
+            "transparency": 0
+          }
+        ]
+      }
+    }
+  }
+}

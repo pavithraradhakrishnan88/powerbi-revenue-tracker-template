@@ -5,13 +5,36 @@
       "name": "CY24SU10",
       "reportVersionAtImport": "5.55",
       "type": "SharedResources"
+    },
+    "customTheme": {
+      "name": "RevenueTracker_LavenderTheme.json",
+      "reportVersionAtImport": {
+        "visual": "2.6.0",
+        "report": "3.3.0",
+        "page": "2.3.0"
+      },
+      "type": "RegisteredResources"
     }
   },
-  "resourcePackages": [],
+  "resourcePackages": [
+    {
+      "name": "RegisteredResources",
+      "type": "RegisteredResources",
+      "items": [
+        {
+          "name": "RevenueTracker_LavenderTheme.json",
+          "path": "RevenueTracker_LavenderTheme.json",
+          "type": "CustomTheme"
+        }
+      ]
+    }
+  ],
   "settings": {
     "useStylableVisualContainerHeader": true,
     "exportDataMode": "AllowSummarized",
     "useDefaultAggregateDisplayName": true
   },
-  "publicCustomVisuals": []
+  "publicCustomVisuals": [
+    "htmlContent443BE3AD55E043BF878BED274D3A6865"
+  ]
 }

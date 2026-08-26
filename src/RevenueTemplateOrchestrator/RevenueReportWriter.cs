@@ -31,6 +31,23 @@ public sealed class RevenueReportWriter
         var targetReportDir = Path.Combine(_outputRoot, "RevenueTracker.Report");
         CopyDirectory(sourceReportDir, targetReportDir);
 
+        // The lavender theme is a required generated artifact, not merely a template-side
+        // file. Materialize it explicitly and fail the GENERATE stage if the authoritative
+        // template does not contain it. This prevents a later THEME gate from discovering
+        // that generation silently dropped the design contract.
+        var themeRelativePath = Path.Combine("StaticResources", "RegisteredResources", "RevenueTracker_LavenderTheme.json");
+        var sourceThemePath = Path.Combine(sourceReportDir, themeRelativePath);
+        var targetThemePath = Path.Combine(targetReportDir, themeRelativePath);
+        if (!File.Exists(sourceThemePath))
+        {
+            throw new FileNotFoundException($"Authoritative Revenue Tracker theme is missing from the template: {sourceThemePath}");
+        }
+        if (!File.Exists(targetThemePath))
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(targetThemePath)!);
+            File.Copy(sourceThemePath, targetThemePath, overwrite: true);
+        }
+
         // CSV files live next to the semantic model definition, matching the relative
         // "Fact_Revenue_SampleData.csv" style path baked into the TMDL partitions.
         var targetDataDir = Path.Combine(_outputRoot, "RevenueTracker.SemanticModel");
@@ -43,6 +60,7 @@ public sealed class RevenueReportWriter
         }
 
         Console.WriteLine("[RevenueReportWriter] Report project + sample CSVs copied with relative paths intact.");
+        Console.WriteLine($"[RevenueReportWriter] Theme materialized: {targetThemePath}");
     }
 
     private static void CopyDirectory(string sourceDir, string targetDir)
