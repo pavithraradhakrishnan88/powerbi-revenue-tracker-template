@@ -26,6 +26,7 @@ public sealed class RevenueSemanticModelWriter
         CopyDirectory(sourceModelDir, targetModelDir);
 
         var measuresByTable = MeasureDefinitions.All
+            .Select(HtmlMeasureFormatMetadata.Resolve)
             .GroupBy(m => m.Table)
             .ToDictionary(g => g.Key, g => g.ToList());
 
