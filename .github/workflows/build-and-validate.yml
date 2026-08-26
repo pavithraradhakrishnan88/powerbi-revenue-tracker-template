@@ -29,7 +29,6 @@ jobs:
       DESKTOP_DIAGNOSTICS_ROOT: ${{ github.workspace }}\generated\DesktopDiagnostics
       EXPECTED_DESKTOP_VERSION: '2.156.951.0'
       EXPECTED_DESKTOP_RELEASE: '26.07'
-      DESKTOP_DOWNLOAD_PAGE: 'https://www.microsoft.com/en-us/download/details.aspx?id=58494'
 
     steps:
       - name: GENERATE — authoritative Revenue Tracker PBIP
@@ -56,49 +55,44 @@ jobs:
         shell: pwsh
         run: .\scripts\Assert-TmdlIndentation.ps1 -SemanticModelRoot (Join-Path $env:OUTPUT_ROOT 'RevenueTracker.SemanticModel')
 
-      - name: STRUCTURAL GATE 1 — Report
+      - name: STRUCTURAL GATES — report, semantic model, PBIP
         shell: pwsh
-        run: .\scripts\Assert-ThreeArtifactStructure.ps1 -GeneratedRoot "$env:OUTPUT_ROOT" -Gate report
-
-      - name: STRUCTURAL GATE 2 — Semantic Model
-        shell: pwsh
-        run: .\scripts\Assert-ThreeArtifactStructure.ps1 -GeneratedRoot "$env:OUTPUT_ROOT" -Gate semantic-model
-
-      - name: STRUCTURAL GATE 3 — .pbip
-        shell: pwsh
-        run: .\scripts\Assert-ThreeArtifactStructure.ps1 -GeneratedRoot "$env:OUTPUT_ROOT" -Gate pbip
+        run: |
+          .\scripts\Assert-ThreeArtifactStructure.ps1 -GeneratedRoot "$env:OUTPUT_ROOT" -Gate report
+          .\scripts\Assert-ThreeArtifactStructure.ps1 -GeneratedRoot "$env:OUTPUT_ROOT" -Gate semantic-model
+          .\scripts\Assert-ThreeArtifactStructure.ps1 -GeneratedRoot "$env:OUTPUT_ROOT" -Gate pbip
 
       - name: THEME — materialize, validate, and register custom theme
         shell: pwsh
         run: |
-          $ErrorActionPreference = 'Stop'
-          $theme = Join-Path $env:OUTPUT_ROOT 'RevenueTracker.Report\StaticResources\RegisteredResources\RevenueTracker_LavenderTheme.json'
-          $report = Join-Path $env:OUTPUT_ROOT 'RevenueTracker.Report\definition\report.json'
-          if (!(Test-Path $theme -PathType Leaf)) { throw "THEME failed: missing $theme" }
-          $themeJson = Get-Content -Raw $theme | ConvertFrom-Json
-          if ([string]$themeJson.name -ne 'Revenue Tracker - White Fintech') { throw "THEME failed: unexpected name '$($themeJson.name)'" }
-          if ([string]$themeJson.background -ne '#FFFFFF') { throw 'THEME failed: background must be #FFFFFF' }
-          if (-not ($themeJson.dataColors -contains '#7B5CFA')) { throw 'THEME failed: #7B5CFA is missing' }
-          if (-not ($themeJson.dataColors -contains '#F0629B')) { throw 'THEME failed: #F0629B is missing' }
-          $reportJson = Get-Content -Raw $report | ConvertFrom-Json
-          if ([string]$reportJson.themeCollection.customTheme.name -ne 'RevenueTracker_LavenderTheme.json') { throw 'THEME failed: custom theme is not registered in report.json' }
-          if ([string]$reportJson.themeCollection.customTheme.type -ne 'RegisteredResources') { throw 'THEME failed: custom theme registration type is not RegisteredResources' }
+          $ErrorActionPreference='Stop'
+          $theme=Join-Path $env:OUTPUT_ROOT 'RevenueTracker.Report\StaticResources\RegisteredResources\RevenueTracker_LavenderTheme.json'
+          $report=Join-Path $env:OUTPUT_ROOT 'RevenueTracker.Report\definition\report.json'
+          if(!(Test-Path $theme -PathType Leaf)){throw "THEME failed: missing $theme"}
+          $t=Get-Content -Raw $theme|ConvertFrom-Json
+          if([string]$t.name -ne 'Revenue Tracker - White Fintech'){throw 'THEME failed: unexpected name'}
+          if([string]$t.background -ne '#FFFFFF'){throw 'THEME failed: background must be #FFFFFF'}
+          if(-not($t.dataColors -contains '#7B5CFA')){throw 'THEME failed: #7B5CFA missing'}
+          if(-not($t.dataColors -contains '#F0629B')){throw 'THEME failed: #F0629B missing'}
+          $r=Get-Content -Raw $report|ConvertFrom-Json
+          if([string]$r.themeCollection.customTheme.name -ne 'RevenueTracker_LavenderTheme.json'){throw 'THEME failed: custom theme not registered'}
+          if([string]$r.themeCollection.customTheme.type -ne 'RegisteredResources'){throw 'THEME failed: registration type'}
           Write-Host 'THEME|PASS|Materialized=PASS|Registration=PASS'
 
       - name: HTML CUSTOM VISUALS — Revenue Overview 4/4
         shell: pwsh
         run: |
-          $ErrorActionPreference = 'Stop'
-          $visualRoot = Join-Path $env:OUTPUT_ROOT 'RevenueTracker.Report\definition\pages\RevenueOverview\visuals'
-          $expected = @('TargetVsActual','CardTotalRevenue','LineRevenueTrend','BarRevenueByProduct')
-          $htmlTypes = @('htmlContent443BE3AD55E043BF878BED274D3A6865','htmlContent')
-          foreach ($name in $expected) {
-            $path = Join-Path $visualRoot "$name\visual.json"
-            if (!(Test-Path $path -PathType Leaf)) { throw "HTML-VISUAL-GATE failed: missing $name/visual.json" }
-            $json = Get-Content -Raw $path | ConvertFrom-Json
-            if ([string]$json.visual.visualType -notin $htmlTypes) { throw "HTML-VISUAL-GATE failed: $name is not HTML Content." }
-            $queryText = $json.visual.query | ConvertTo-Json -Depth 100 -Compress
-            if ($queryText -notmatch 'RevenueKpiHtml|RevenueByProductHtml|RevenueTrendHtml|TargetVsActualHtml') { throw "HTML-VISUAL-GATE failed: $name has no valid DAX HTML binding." }
+          $ErrorActionPreference='Stop'
+          $root=Join-Path $env:OUTPUT_ROOT 'RevenueTracker.Report\definition\pages\RevenueOverview\visuals'
+          $expected=@('TargetVsActual','CardTotalRevenue','LineRevenueTrend','BarRevenueByProduct')
+          $types=@('htmlContent443BE3AD55E043BF878BED274D3A6865','htmlContent')
+          foreach($name in $expected){
+            $p=Join-Path $root "$name\visual.json"
+            if(!(Test-Path $p -PathType Leaf)){throw "HTML-VISUAL-GATE failed: missing $name"}
+            $j=Get-Content -Raw $p|ConvertFrom-Json
+            if([string]$j.visual.visualType -notin $types){throw "HTML-VISUAL-GATE failed: $name is not HTML Content"}
+            $q=$j.visual.query|ConvertTo-Json -Depth 100 -Compress
+            if($q -notmatch 'RevenueKpiHtml|RevenueByProductHtml|RevenueTrendHtml|TargetVsActualHtml'){throw "HTML-VISUAL-GATE failed: $name has no valid DAX HTML binding"}
           }
           Write-Host 'HTML-VISUAL-GATE|PASS|RevenueOverview=4/4|DaxHtmlBinding=PASS'
 
@@ -109,29 +103,27 @@ jobs:
       - name: SHAPES / BUTTONS / BOOKMARKS — integrity scan
         shell: pwsh
         run: |
-          $ErrorActionPreference = 'Stop'
-          $visualFiles = @(Get-ChildItem (Join-Path $env:OUTPUT_ROOT 'RevenueTracker.Report\definition\pages') -Recurse -Filter 'visual.json' -File)
-          foreach ($file in $visualFiles) { Get-Content -Raw $file.FullName | ConvertFrom-Json | Out-Null }
-          Write-Host "INTERACTIVE-ARTIFACT-GATE|PASS|VisualJsonParse=PASS|Visuals=$($visualFiles.Count)"
+          $files=@(Get-ChildItem (Join-Path $env:OUTPUT_ROOT 'RevenueTracker.Report\definition\pages') -Recurse -Filter 'visual.json' -File)
+          foreach($f in $files){Get-Content -Raw $f.FullName|ConvertFrom-Json|Out-Null}
+          Write-Host "INTERACTIVE-ARTIFACT-GATE|PASS|VisualJsonParse=PASS|Visuals=$($files.Count)"
 
       - name: PBIR VALIDATION — all generated visuals
         shell: pwsh
         run: |
-          $pagesRoot = Join-Path $env:OUTPUT_ROOT 'RevenueTracker.Report\definition\pages'
-          $generatedVisuals = @(Get-ChildItem -Path $pagesRoot -Recurse -Filter 'visual.json' -File).Count
-          if ($generatedVisuals -lt 5) { throw "PBIR validation failed: expected at least 5 generated visuals, found $generatedVisuals." }
+          $pages=Join-Path $env:OUTPUT_ROOT 'RevenueTracker.Report\definition\pages'
+          $count=@(Get-ChildItem $pages -Recurse -Filter 'visual.json' -File).Count
+          if($count -lt 5){throw "PBIR validation failed: expected at least 5 generated visuals, found $count"}
           .\scripts\Assert-MeasureExpressionParity.ps1 -GeneratedRoot "$env:OUTPUT_ROOT"
           .\scripts\Assert-PbirPageLayoutGate.ps1 -GeneratedRoot "$env:OUTPUT_ROOT"
-          Write-Host "PBIR-VALIDATION|PASS|GeneratedVisuals=$generatedVisuals|Measures=parity|Pages=valid"
+          Write-Host "PBIR-VALIDATION|PASS|GeneratedVisuals=$count|Measures=parity|Pages=valid"
 
       - name: DATA LOAD GATE — verify source inputs
         shell: pwsh
         run: |
-          $ErrorActionPreference = 'Stop'
-          $fact = Join-Path $env:DATA_ROOT 'Fact_Revenue_SampleData.csv'
-          if (!(Test-Path $fact -PathType Leaf)) { throw "DATA-LOAD-GATE failed: missing $fact" }
-          $rows = @(Import-Csv $fact)
-          if ($rows.Count -eq 0) { throw 'DATA-LOAD-GATE failed: revenue source contains no rows.' }
+          $fact=Join-Path $env:DATA_ROOT 'Fact_Revenue_SampleData.csv'
+          if(!(Test-Path $fact -PathType Leaf)){throw "DATA-LOAD-GATE failed: missing $fact"}
+          $rows=@(Import-Csv $fact)
+          if($rows.Count -eq 0){throw 'DATA-LOAD-GATE failed: revenue source contains no rows'}
           Write-Host "DATA-LOAD-GATE|PASS|FactRevenueRows=$($rows.Count)"
 
       - name: THREE-ARTIFACT ASSEMBLY
@@ -141,85 +133,31 @@ jobs:
       - name: PACKAGE — single Revenue Tracker PBIP bundle
         shell: pwsh
         run: |
-          $ErrorActionPreference = 'Stop'
-          if (Test-Path $env:PACKAGE_ROOT) { Remove-Item $env:PACKAGE_ROOT -Recurse -Force }
-          New-Item -ItemType Directory -Path $env:PACKAGE_ROOT -Force | Out-Null
-          foreach ($name in @('RevenueTracker.Report','RevenueTracker.SemanticModel','RevenueTracker.pbip')) {
-            $source = Join-Path $env:OUTPUT_ROOT $name
-            if (!(Test-Path $source)) { throw "PACKAGE-GATE failed: $name is missing." }
+          $ErrorActionPreference='Stop'
+          if(Test-Path $env:PACKAGE_ROOT){Remove-Item $env:PACKAGE_ROOT -Recurse -Force}
+          New-Item -ItemType Directory -Path $env:PACKAGE_ROOT -Force|Out-Null
+          foreach($name in @('RevenueTracker.Report','RevenueTracker.SemanticModel','RevenueTracker.pbip')){
+            $source=Join-Path $env:OUTPUT_ROOT $name
+            if(!(Test-Path $source)){throw "PACKAGE-GATE failed: $name missing"}
             Copy-Item $source (Join-Path $env:PACKAGE_ROOT $name) -Recurse -Force
           }
           Add-Type -AssemblyName System.IO.Compression.FileSystem
-          $zip = Join-Path $env:GITHUB_WORKSPACE 'RevenueTracker-PBIP.zip'
-          if (Test-Path $zip) { Remove-Item $zip -Force }
-          [System.IO.Compression.ZipFile]::CreateFromDirectory($env:PACKAGE_ROOT,$zip,[System.IO.Compression.CompressionLevel]::Optimal,$false)
-          if (!(Test-Path $zip -PathType Leaf)) { throw 'PACKAGE-GATE failed: bundle ZIP was not created.' }
+          $zip=Join-Path $env:GITHUB_WORKSPACE 'RevenueTracker-PBIP.zip'
+          if(Test-Path $zip){Remove-Item $zip -Force}
+          [IO.Compression.ZipFile]::CreateFromDirectory($env:PACKAGE_ROOT,$zip,[IO.Compression.CompressionLevel]::Optimal,$false)
+          if(!(Test-Path $zip -PathType Leaf)){throw 'PACKAGE-GATE failed: ZIP not created'}
           Write-Host 'PACKAGE-GATE|PASS|Unit=RevenueTracker-PBIP.zip'
 
-      - name: DESKTOP ENVIRONMENT PREREQUISITE — exact July 2026 Desktop
+      - name: DESKTOP ENVIRONMENT PREREQUISITE — detect/install exact July 2026 Desktop
         shell: pwsh
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $diag = $env:DESKTOP_DIAGNOSTICS_ROOT
-          New-Item -ItemType Directory -Path $diag -Force | Out-Null
-
-          function Get-PowerBiDesktopCandidates {
-            $known = @(
-              'C:\Program Files\Microsoft Power BI Desktop\bin\PBIDesktop.exe',
-              'C:\Program Files\Microsoft Power BI Desktop RS\bin\PBIDesktop.exe',
-              'C:\Program Files\Microsoft Power BI Desktop\bin\PBIDesktopStore.exe'
-            )
-            $found = @($known | Where-Object { Test-Path $_ -PathType Leaf })
-            $found += @(Get-ChildItem 'C:\Program Files' -Filter 'PBIDesktop.exe' -File -Recurse -ErrorAction SilentlyContinue | Select-Object -ExpandProperty FullName)
-            $found | Sort-Object -Unique
-          }
-
-          $candidates = @(Get-PowerBiDesktopCandidates)
-          $matching = $candidates | ForEach-Object {
-            $item = Get-Item $_
-            [pscustomobject]@{ Path=$_.ToString(); ProductVersion=$item.VersionInfo.ProductVersion; FileVersion=$item.VersionInfo.FileVersion }
-          } | Where-Object { $_.ProductVersion -eq $env:EXPECTED_DESKTOP_VERSION }
-
-          if ($matching) {
-            $desktop = $matching | Select-Object -First 1
-            Write-Host "DESKTOP-ENVIRONMENT-GATE|PASS|Source=Installed|ProductVersion=$($desktop.ProductVersion)|Path=$($desktop.Path)"
-          } else {
-            Write-Host "DESKTOP-ENVIRONMENT-GATE|INSTALL|RequiredVersion=$env:EXPECTED_DESKTOP_VERSION|Source=MicrosoftDownloadCenter"
-            $page = Invoke-WebRequest -Uri $env:DESKTOP_DOWNLOAD_PAGE -UseBasicParsing
-            $html = $page.Content
-            if ($html -notmatch [regex]::Escape($env:EXPECTED_DESKTOP_VERSION)) { throw "DESKTOP-ENVIRONMENT-GATE failed: Microsoft Download Center page does not advertise $env:EXPECTED_DESKTOP_VERSION." }
-            $match = [regex]::Match($html, 'https://download\.microsoft\.com/[^\"''<> ]+PBIDesktopSetup_x64\.exe')
-            if (-not $match.Success) { throw 'DESKTOP-ENVIRONMENT-GATE failed: could not resolve the Microsoft-hosted PBIDesktopSetup_x64.exe URL from the verified Download Center page.' }
-            $installer = Join-Path $diag 'PBIDesktopSetup_x64.exe'
-            Invoke-WebRequest -Uri $match.Value -OutFile $installer -UseBasicParsing
-            $sig = Get-AuthenticodeSignature $installer
-            if ($sig.Status -ne 'Valid' -or $sig.SignerCertificate.Subject -notmatch 'Microsoft') {
-              throw "DESKTOP-ENVIRONMENT-GATE failed: installer Authenticode signature is not valid Microsoft-signed. Status=$($sig.Status) Subject=$($sig.SignerCertificate.Subject)"
-            }
-            $installerVersion = (Get-Item $installer).VersionInfo.ProductVersion
-            if ($installerVersion -ne $env:EXPECTED_DESKTOP_VERSION) { throw "DESKTOP-ENVIRONMENT-GATE failed: downloaded installer ProductVersion=$installerVersion, expected $env:EXPECTED_DESKTOP_VERSION." }
-            Start-Process -FilePath $installer -ArgumentList '/quiet','/norestart','ACCEPT_EULA=1' -Wait -NoNewWindow
-            $candidates = @(Get-PowerBiDesktopCandidates)
-            $matching = $candidates | ForEach-Object {
-              $item = Get-Item $_
-              [pscustomobject]@{ Path=$_.ToString(); ProductVersion=$item.VersionInfo.ProductVersion; FileVersion=$item.VersionInfo.FileVersion }
-            } | Where-Object { $_.ProductVersion -eq $env:EXPECTED_DESKTOP_VERSION }
-            if (-not $matching) { throw "DESKTOP-ENVIRONMENT-GATE failed: exact version $env:EXPECTED_DESKTOP_VERSION was not installed." }
-            $desktop = $matching | Select-Object -First 1
-            Write-Host "DESKTOP-ENVIRONMENT-GATE|PASS|Source=MicrosoftDownloadCenter|ProductVersion=$($desktop.ProductVersion)|Path=$($desktop.Path)"
-          }
-
-          $desktop | ConvertTo-Json | Set-Content (Join-Path $diag 'desktop-environment.json') -Encoding utf8
-          if ($desktop.ProductVersion -ne $env:EXPECTED_DESKTOP_VERSION) { throw "DESKTOP-ENVIRONMENT-GATE failed: expected $env:EXPECTED_DESKTOP_VERSION, found $($desktop.ProductVersion)." }
-          Write-Host "DESKTOP-VERSION-GATE|PASS|Version=$($desktop.ProductVersion)|Release=$env:EXPECTED_DESKTOP_RELEASE"
+        run: .\scripts\Install-VerifiedPowerBiDesktopJuly2026.ps1 -ExpectedVersion "$env:EXPECTED_DESKTOP_VERSION" -ExpectedRelease "$env:EXPECTED_DESKTOP_RELEASE" -DiagnosticsRoot "$env:DESKTOP_DIAGNOSTICS_ROOT"
 
       - name: VERIFY — 2.156.951.0 (26.07)
         shell: pwsh
         run: |
-          $ErrorActionPreference = 'Stop'
-          $envInfo = Get-Content -Raw (Join-Path $env:DESKTOP_DIAGNOSTICS_ROOT 'desktop-environment.json') | ConvertFrom-Json
-          if ($envInfo.ProductVersion -ne $env:EXPECTED_DESKTOP_VERSION) { throw "DESKTOP-VERSION-VERIFY failed: expected $env:EXPECTED_DESKTOP_VERSION, found $($envInfo.ProductVersion)." }
-          Write-Host "DESKTOP-VERSION-VERIFY|PASS|ProductVersion=$($envInfo.ProductVersion)|Release=$env:EXPECTED_DESKTOP_RELEASE"
+          $i=Get-Content -Raw (Join-Path $env:DESKTOP_DIAGNOSTICS_ROOT 'desktop-environment.json')|ConvertFrom-Json
+          if($i.ProductVersion -ne $env:EXPECTED_DESKTOP_VERSION){throw "DESKTOP-VERSION-VERIFY failed: expected $env:EXPECTED_DESKTOP_VERSION, found $($i.ProductVersion)"}
+          Write-Host "DESKTOP-VERSION-VERIFY|PASS|ProductVersion=$($i.ProductVersion)|Release=$env:EXPECTED_DESKTOP_RELEASE"
 
       - name: REAL DESKTOP / BRIDGE LAUNCH + PBIP LOAD + DIAGNOSTICS
         shell: pwsh
@@ -228,13 +166,12 @@ jobs:
       - name: DESKTOP UAT
         shell: pwsh
         run: |
-          $ErrorActionPreference = 'Stop'
-          $uat = Join-Path $env:DESKTOP_DIAGNOSTICS_ROOT 'desktop-uat.json'
-          if (!(Test-Path $uat -PathType Leaf)) { throw 'DESKTOP-UAT failed: real Desktop UAT result is missing.' }
-          $result = Get-Content -Raw $uat | ConvertFrom-Json
-          if ($result.ProductVersion -ne $env:EXPECTED_DESKTOP_VERSION) { throw 'DESKTOP-UAT failed: version prerequisite was not satisfied.' }
-          if ($result.BridgeOpen -ne $true -or $result.BridgeStatus -ne $true -or $result.PbipLoad -ne $true -or $result.DiagnosticsCaptured -ne $true) { throw 'DESKTOP-UAT failed: real Desktop/Bridge load and diagnostics prerequisites are incomplete.' }
-          Write-Host "DESKTOP-UAT|PASS|Version=$($result.ProductVersion)|BridgeOpen=PASS|BridgeStatus=PASS|PBIPLoad=PASS|Diagnostics=PASS"
+          $uat=Join-Path $env:DESKTOP_DIAGNOSTICS_ROOT 'desktop-uat.json'
+          if(!(Test-Path $uat -PathType Leaf)){throw 'DESKTOP-UAT failed: real Desktop UAT result is missing'}
+          $r=Get-Content -Raw $uat|ConvertFrom-Json
+          if($r.ProductVersion -ne $env:EXPECTED_DESKTOP_VERSION){throw 'DESKTOP-UAT failed: version prerequisite not satisfied'}
+          if($r.BridgeOpen -ne $true -or $r.BridgeStatus -ne $true -or $r.PbipLoad -ne $true -or $r.DiagnosticsCaptured -ne $true){throw 'DESKTOP-UAT failed: real Desktop/Bridge load and diagnostics incomplete'}
+          Write-Host "DESKTOP-UAT|PASS|Version=$($r.ProductVersion)|BridgeOpen=PASS|BridgeStatus=PASS|PBIPLoad=PASS|Diagnostics=PASS"
 
       - name: PUBLISH — single verified Revenue Tracker bundle
         if: success()
