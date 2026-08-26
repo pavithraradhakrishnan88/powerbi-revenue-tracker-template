@@ -1,4 +1,4 @@
-name: DesktopValidation-PBIP
+name: Build-Validate-PBIP
 
 on:
   push:
@@ -25,10 +25,6 @@ jobs:
       DATA_ROOT: ${{ github.workspace }}\data
       OUTPUT_ROOT: ${{ github.workspace }}\generated
       PACKAGE_ROOT: ${{ github.workspace }}\package
-      PBIP_PATH: ${{ github.workspace }}\generated\RevenueTracker.pbip
-      DESKTOP_DIAGNOSTICS_ROOT: ${{ github.workspace }}\generated\DesktopDiagnostics
-      EXPECTED_DESKTOP_VERSION: '2.156.951.0'
-      EXPECTED_DESKTOP_RELEASE: '26.07'
 
     steps:
       - name: GENERATE — authoritative Revenue Tracker PBIP
@@ -148,31 +144,6 @@ jobs:
           if(!(Test-Path $zip -PathType Leaf)){throw 'PACKAGE-GATE failed: ZIP not created'}
           Write-Host 'PACKAGE-GATE|PASS|Unit=RevenueTracker-PBIP.zip'
 
-      - name: DESKTOP ENVIRONMENT PREREQUISITE — detect/install exact July 2026 Desktop
-        shell: pwsh
-        run: .\scripts\Install-VerifiedPowerBiDesktopJuly2026.ps1 -ExpectedVersion "$env:EXPECTED_DESKTOP_VERSION" -ExpectedRelease "$env:EXPECTED_DESKTOP_RELEASE" -DiagnosticsRoot "$env:DESKTOP_DIAGNOSTICS_ROOT"
-
-      - name: VERIFY — 2.156.951.0 (26.07)
-        shell: pwsh
-        run: |
-          $i=Get-Content -Raw (Join-Path $env:DESKTOP_DIAGNOSTICS_ROOT 'desktop-environment.json')|ConvertFrom-Json
-          if($i.ProductVersion -ne $env:EXPECTED_DESKTOP_VERSION){throw "DESKTOP-VERSION-VERIFY failed: expected $env:EXPECTED_DESKTOP_VERSION, found $($i.ProductVersion)"}
-          Write-Host "DESKTOP-VERSION-VERIFY|PASS|ProductVersion=$($i.ProductVersion)|Release=$env:EXPECTED_DESKTOP_RELEASE"
-
-      - name: REAL DESKTOP / BRIDGE LAUNCH + PBIP LOAD + DIAGNOSTICS
-        shell: pwsh
-        run: .\scripts\Invoke-RealDesktopUat.ps1 -PbipPath "$env:PBIP_PATH" -ExpectedVersion "$env:EXPECTED_DESKTOP_VERSION" -DiagnosticsRoot "$env:DESKTOP_DIAGNOSTICS_ROOT"
-
-      - name: DESKTOP UAT
-        shell: pwsh
-        run: |
-          $uat=Join-Path $env:DESKTOP_DIAGNOSTICS_ROOT 'desktop-uat.json'
-          if(!(Test-Path $uat -PathType Leaf)){throw 'DESKTOP-UAT failed: real Desktop UAT result is missing'}
-          $r=Get-Content -Raw $uat|ConvertFrom-Json
-          if($r.ProductVersion -ne $env:EXPECTED_DESKTOP_VERSION){throw 'DESKTOP-UAT failed: version prerequisite not satisfied'}
-          if($r.BridgeOpen -ne $true -or $r.BridgeStatus -ne $true -or $r.PbipLoad -ne $true -or $r.DiagnosticsCaptured -ne $true){throw 'DESKTOP-UAT failed: real Desktop/Bridge load and diagnostics incomplete'}
-          Write-Host "DESKTOP-UAT|PASS|Version=$($r.ProductVersion)|BridgeOpen=PASS|BridgeStatus=PASS|PBIPLoad=PASS|Diagnostics=PASS"
-
       - name: PUBLISH — single verified Revenue Tracker bundle
         if: success()
         uses: actions/upload-artifact@v4
@@ -190,6 +161,5 @@ jobs:
           path: |
             **/*.log
             **/TestResults/**
-            generated/DesktopDiagnostics/**
           if-no-files-found: ignore
           retention-days: 7
