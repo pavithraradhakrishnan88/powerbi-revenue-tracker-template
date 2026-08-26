@@ -6,25 +6,6 @@ namespace RevenueTemplateOrchestrator;
 /// <summary>
 /// Patches DAX measures into the base TMDL table files and copies the semantic model
 /// folder into the generated output.
-///
-/// Pitfalls carried over from powerbi-pipeline-sla-template (see the runbook) and
-/// specifically guarded against here:
-///
-///  1. UTF-8 BOM corruption — Windows PowerShell 5.1's `Set-Content -Encoding utf8`
-///     writes a BOM that TMDL's parser chokes on. We never touch PowerShell for file
-///     writes; everything here goes through WriteAllTextNoBom.
-///
-///  2. "InvalidLineType: Unexpected line type: Empty" — caused by double blank lines
-///     left behind after patching columns/measures. CollapseDoubleBlankLines() runs as
-///     a final pass on every file this writer touches.
-///
-///  3. Column/measure ordering — TMDL wants columns declared before measures in a table
-///     block. InsertMeasureBlock() always inserts measures after the last existing
-///     `column` block and before the `partition` block, never at the top of the file.
-///
-///  4. Additive-only patching — every measure is matched by name via regex and replaced
-///     in place if found; only genuinely new measures are appended. Nothing here assumes
-///     "if it's not in my diff, it doesn't already exist."
 /// </summary>
 public sealed class RevenueSemanticModelWriter
 {
@@ -75,11 +56,13 @@ public sealed class RevenueSemanticModelWriter
 
     private static string ReconcileMeasure(string tmdlContent, MeasureDefinition measure)
     {
-        var block = RenderMeasureBlock(measure);
+        if (string.IsNullOrWhiteSpace(measure.Expression))
+            throw new InvalidOperationException($"Measure '{measure.Name}' has an empty expression.");
 
-        // Match an existing "measure 'Name' = ..." block up to (but not including) the
-        // next top-level "measure ", "column ", or "partition " keyword at the same
-        // (single-tab) indent level, or end of file.
+        if (string.IsNullOrWhiteSpace(measure.FormatString))
+            throw new InvalidOperationException($"Measure '{measure.Name}' has an empty FormatString; refusing to emit invalid TMDL.");
+
+        var block = RenderMeasureBlock(measure);
         var pattern = new Regex(
             $@"(?m)^\tmeasure '?{Regex.Escape(measure.Name)}'?\s*=.*?(?=^\t(measure|column|partition)\s|\z)",
             RegexOptions.Singleline);
@@ -90,13 +73,9 @@ public sealed class RevenueSemanticModelWriter
             return tmdlContent[..match.Index] + block + tmdlContent[(match.Index + match.Length)..];
         }
 
-        // Not found — insert after the last column block, before the first partition block.
         var partitionMatch = Regex.Match(tmdlContent, @"(?m)^\tpartition\s");
         if (!partitionMatch.Success)
-        {
-            // No partition block (shouldn't happen for our tables) — append at end.
             return tmdlContent.TrimEnd('\n') + "\n\n" + block + "\n";
-        }
 
         return tmdlContent[..partitionMatch.Index] + block + "\n" + tmdlContent[partitionMatch.Index..];
     }
@@ -120,7 +99,8 @@ public sealed class RevenueSemanticModelWriter
 
         sb.Append('\n');
         sb.Append('\t').Append("\tformatString: ").Append(measure.FormatString).Append('\n');
-        sb.Append('\t').Append("\tdisplayFolder: ").Append(measure.DisplayFolder).Append('\n');
+        if (!string.IsNullOrWhiteSpace(measure.DisplayFolder))
+            sb.Append('\t').Append("\tdisplayFolder: ").Append(measure.DisplayFolder).Append('\n');
         sb.Append('\t').Append("\tlineageTag = ").Append(SlugTag(measure.Name)).Append('\n');
         sb.Append('\n');
         sb.Append('\t').Append("\tannotation PBI_FormatHint = {\"isGeneralNumber\":true}\n");
