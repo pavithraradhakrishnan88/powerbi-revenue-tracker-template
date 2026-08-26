@@ -19,13 +19,17 @@ permissions:
 jobs:
   build-and-validate:
     runs-on: windows-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
     env:
       TEMPLATE_ROOT: ${{ github.workspace }}\template
       DATA_ROOT: ${{ github.workspace }}\data
       OUTPUT_ROOT: ${{ github.workspace }}\generated
       PACKAGE_ROOT: ${{ github.workspace }}\package
       PBIP_PATH: ${{ github.workspace }}\generated\RevenueTracker.pbip
+      DESKTOP_DIAGNOSTICS_ROOT: ${{ github.workspace }}\generated\DesktopDiagnostics
+      EXPECTED_DESKTOP_VERSION: '2.156.951.0'
+      EXPECTED_DESKTOP_RELEASE: '26.07'
+      DESKTOP_DOWNLOAD_PAGE: 'https://www.microsoft.com/en-us/download/details.aspx?id=58494'
 
     steps:
       - name: GENERATE — authoritative Revenue Tracker PBIP
@@ -152,20 +156,85 @@ jobs:
           if (!(Test-Path $zip -PathType Leaf)) { throw 'PACKAGE-GATE failed: bundle ZIP was not created.' }
           Write-Host 'PACKAGE-GATE|PASS|Unit=RevenueTracker-PBIP.zip'
 
-      - name: INSTALL — exact July 2026 Power BI Desktop
+      - name: DESKTOP ENVIRONMENT PREREQUISITE — exact July 2026 Desktop
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          winget install --id Microsoft.PowerBI --exact --version 2.156.951.0 --silent --accept-source-agreements --accept-package-agreements
-          $desktop = Get-ChildItem 'C:\Program Files' -Filter 'PBIDesktop.exe' -File -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
-          if (-not $desktop) { throw 'DESKTOP-INSTALL-GATE failed: PBIDesktop.exe not found after installation.' }
-          $version = $desktop.VersionInfo.ProductVersion
-          if ($version -ne '2.156.951.0') { throw "DESKTOP-INSTALL-GATE failed: expected 2.156.951.0, found $version" }
-          Write-Host "DESKTOP-INSTALL-GATE|PASS|ProductVersion=$version|Path=$($desktop.FullName)"
+          $diag = $env:DESKTOP_DIAGNOSTICS_ROOT
+          New-Item -ItemType Directory -Path $diag -Force | Out-Null
 
-      - name: DESKTOP UAT — REAL PBIP LOAD
+          function Get-PowerBiDesktopCandidates {
+            $known = @(
+              'C:\Program Files\Microsoft Power BI Desktop\bin\PBIDesktop.exe',
+              'C:\Program Files\Microsoft Power BI Desktop RS\bin\PBIDesktop.exe',
+              'C:\Program Files\Microsoft Power BI Desktop\bin\PBIDesktopStore.exe'
+            )
+            $found = @($known | Where-Object { Test-Path $_ -PathType Leaf })
+            $found += @(Get-ChildItem 'C:\Program Files' -Filter 'PBIDesktop.exe' -File -Recurse -ErrorAction SilentlyContinue | Select-Object -ExpandProperty FullName)
+            $found | Sort-Object -Unique
+          }
+
+          $candidates = @(Get-PowerBiDesktopCandidates)
+          $matching = $candidates | ForEach-Object {
+            $item = Get-Item $_
+            [pscustomobject]@{ Path=$_.ToString(); ProductVersion=$item.VersionInfo.ProductVersion; FileVersion=$item.VersionInfo.FileVersion }
+          } | Where-Object { $_.ProductVersion -eq $env:EXPECTED_DESKTOP_VERSION }
+
+          if ($matching) {
+            $desktop = $matching | Select-Object -First 1
+            Write-Host "DESKTOP-ENVIRONMENT-GATE|PASS|Source=Installed|ProductVersion=$($desktop.ProductVersion)|Path=$($desktop.Path)"
+          } else {
+            Write-Host "DESKTOP-ENVIRONMENT-GATE|INSTALL|RequiredVersion=$env:EXPECTED_DESKTOP_VERSION|Source=MicrosoftDownloadCenter"
+            $page = Invoke-WebRequest -Uri $env:DESKTOP_DOWNLOAD_PAGE -UseBasicParsing
+            $html = $page.Content
+            if ($html -notmatch [regex]::Escape($env:EXPECTED_DESKTOP_VERSION)) { throw "DESKTOP-ENVIRONMENT-GATE failed: Microsoft Download Center page does not advertise $env:EXPECTED_DESKTOP_VERSION." }
+            $match = [regex]::Match($html, 'https://download\.microsoft\.com/[^\"''<> ]+PBIDesktopSetup_x64\.exe')
+            if (-not $match.Success) { throw 'DESKTOP-ENVIRONMENT-GATE failed: could not resolve the Microsoft-hosted PBIDesktopSetup_x64.exe URL from the verified Download Center page.' }
+            $installer = Join-Path $diag 'PBIDesktopSetup_x64.exe'
+            Invoke-WebRequest -Uri $match.Value -OutFile $installer -UseBasicParsing
+            $sig = Get-AuthenticodeSignature $installer
+            if ($sig.Status -ne 'Valid' -or $sig.SignerCertificate.Subject -notmatch 'Microsoft') {
+              throw "DESKTOP-ENVIRONMENT-GATE failed: installer Authenticode signature is not valid Microsoft-signed. Status=$($sig.Status) Subject=$($sig.SignerCertificate.Subject)"
+            }
+            $installerVersion = (Get-Item $installer).VersionInfo.ProductVersion
+            if ($installerVersion -ne $env:EXPECTED_DESKTOP_VERSION) { throw "DESKTOP-ENVIRONMENT-GATE failed: downloaded installer ProductVersion=$installerVersion, expected $env:EXPECTED_DESKTOP_VERSION." }
+            Start-Process -FilePath $installer -ArgumentList '/quiet','/norestart','ACCEPT_EULA=1' -Wait -NoNewWindow
+            $candidates = @(Get-PowerBiDesktopCandidates)
+            $matching = $candidates | ForEach-Object {
+              $item = Get-Item $_
+              [pscustomobject]@{ Path=$_.ToString(); ProductVersion=$item.VersionInfo.ProductVersion; FileVersion=$item.VersionInfo.FileVersion }
+            } | Where-Object { $_.ProductVersion -eq $env:EXPECTED_DESKTOP_VERSION }
+            if (-not $matching) { throw "DESKTOP-ENVIRONMENT-GATE failed: exact version $env:EXPECTED_DESKTOP_VERSION was not installed." }
+            $desktop = $matching | Select-Object -First 1
+            Write-Host "DESKTOP-ENVIRONMENT-GATE|PASS|Source=MicrosoftDownloadCenter|ProductVersion=$($desktop.ProductVersion)|Path=$($desktop.Path)"
+          }
+
+          $desktop | ConvertTo-Json | Set-Content (Join-Path $diag 'desktop-environment.json') -Encoding utf8
+          if ($desktop.ProductVersion -ne $env:EXPECTED_DESKTOP_VERSION) { throw "DESKTOP-ENVIRONMENT-GATE failed: expected $env:EXPECTED_DESKTOP_VERSION, found $($desktop.ProductVersion)." }
+          Write-Host "DESKTOP-VERSION-GATE|PASS|Version=$($desktop.ProductVersion)|Release=$env:EXPECTED_DESKTOP_RELEASE"
+
+      - name: VERIFY — 2.156.951.0 (26.07)
         shell: pwsh
-        run: .\scripts\Invoke-RealDesktopUat.ps1 -PbipPath "$env:PBIP_PATH" -ExpectedVersion '2.156.951.0'
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $envInfo = Get-Content -Raw (Join-Path $env:DESKTOP_DIAGNOSTICS_ROOT 'desktop-environment.json') | ConvertFrom-Json
+          if ($envInfo.ProductVersion -ne $env:EXPECTED_DESKTOP_VERSION) { throw "DESKTOP-VERSION-VERIFY failed: expected $env:EXPECTED_DESKTOP_VERSION, found $($envInfo.ProductVersion)." }
+          Write-Host "DESKTOP-VERSION-VERIFY|PASS|ProductVersion=$($envInfo.ProductVersion)|Release=$env:EXPECTED_DESKTOP_RELEASE"
+
+      - name: REAL DESKTOP / BRIDGE LAUNCH + PBIP LOAD + DIAGNOSTICS
+        shell: pwsh
+        run: .\scripts\Invoke-RealDesktopUat.ps1 -PbipPath "$env:PBIP_PATH" -ExpectedVersion "$env:EXPECTED_DESKTOP_VERSION" -DiagnosticsRoot "$env:DESKTOP_DIAGNOSTICS_ROOT"
+
+      - name: DESKTOP UAT
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $uat = Join-Path $env:DESKTOP_DIAGNOSTICS_ROOT 'desktop-uat.json'
+          if (!(Test-Path $uat -PathType Leaf)) { throw 'DESKTOP-UAT failed: real Desktop UAT result is missing.' }
+          $result = Get-Content -Raw $uat | ConvertFrom-Json
+          if ($result.ProductVersion -ne $env:EXPECTED_DESKTOP_VERSION) { throw 'DESKTOP-UAT failed: version prerequisite was not satisfied.' }
+          if ($result.BridgeOpen -ne $true -or $result.BridgeStatus -ne $true -or $result.PbipLoad -ne $true -or $result.DiagnosticsCaptured -ne $true) { throw 'DESKTOP-UAT failed: real Desktop/Bridge load and diagnostics prerequisites are incomplete.' }
+          Write-Host "DESKTOP-UAT|PASS|Version=$($result.ProductVersion)|BridgeOpen=PASS|BridgeStatus=PASS|PBIPLoad=PASS|Diagnostics=PASS"
 
       - name: PUBLISH — single verified Revenue Tracker bundle
         if: success()
@@ -184,5 +253,6 @@ jobs:
           path: |
             **/*.log
             **/TestResults/**
+            generated/DesktopDiagnostics/**
           if-no-files-found: ignore
           retention-days: 7
