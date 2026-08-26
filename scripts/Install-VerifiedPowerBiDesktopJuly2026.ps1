@@ -7,17 +7,31 @@ $ErrorActionPreference='Stop'
 New-Item -ItemType Directory -Path $DiagnosticsRoot -Force | Out-Null
 $diag=Join-Path $DiagnosticsRoot 'desktop-environment.json'
 $log=Join-Path $DiagnosticsRoot 'desktop-install.log'
+$processDiag=Join-Path $DiagnosticsRoot 'desktop-install-timeout-processes.json'
+$installerTimeoutSeconds=900
 
 $ExpectedInstallerUrl='https://download.microsoft.com/download/8/8/0/880BCA75-79DD-466A-927D-1ABF1F5454B0/PBIDesktopSetup-2026-07_x64.exe'
 $ExpectedInstallerSha256='FF265B2DD4A52E77475452DE014ED5BABB4C73B83284FC17ADDA7D774A62C5C4'
 
 function Save-Diagnostic($obj){$obj|ConvertTo-Json -Depth 10|Set-Content $diag -Encoding utf8}
 function Get-DesktopCandidates {
-  $paths=@('C:\Program Files\Microsoft Power BI Desktop\bin\PBIDesktop.exe','C:\Program Files\Microsoft Power BI Desktop RS\bin\PBIDesktop.exe','C:\Program Files\Microsoft Power BI Desktop\bin\PBIDesktopStore.exe')
-  $paths += @(Get-ChildItem 'C:\Program Files' -Filter 'PBIDesktop.exe' -File -Recurse -ErrorAction SilentlyContinue|Select-Object -ExpandProperty FullName)
-  foreach($p in ($paths|Sort-Object -Unique)){if(Test-Path $p -PathType Leaf){$i=Get-Item $p;[pscustomobject]@{Path=$p;ProductVersion=$i.VersionInfo.ProductVersion;FileVersion=$i.VersionInfo.FileVersion}}}
+  $paths=@(
+    'C:\Program Files\Microsoft Power BI Desktop\bin\PBIDesktop.exe',
+    'C:\Program Files\Microsoft Power BI Desktop RS\bin\PBIDesktop.exe',
+    'C:\Program Files\Microsoft Power BI Desktop\bin\PBIDesktopStore.exe'
+  )
+  foreach($p in ($paths|Sort-Object -Unique)){
+    if(Test-Path $p -PathType Leaf){
+      $i=Get-Item $p
+      [pscustomobject]@{Path=$p;ProductVersion=$i.VersionInfo.ProductVersion;FileVersion=$i.VersionInfo.FileVersion}
+    }
+  }
 }
-$state=[ordered]@{ExpectedVersion=$ExpectedVersion;ExpectedRelease=$ExpectedRelease;Source=$null;ArchiveValidated=$false;Path=$null;ProductVersion=$null;Installer=$null;InstallerSha256=$null;ExpectedInstallerSha256=$ExpectedInstallerSha256;InstallerVersion=$null;SignatureStatus=$null;Signer=$null;InstallerExitCode=$null;Error=$null}
+function Get-InstallerProcessSnapshot {
+  @(Get-Process -Name 'PBIDesktopSetup','msiexec','PBIDesktop','PBIDesktopStore' -ErrorAction SilentlyContinue |
+    Select-Object Id,ProcessName,StartTime,CPU,Path)
+}
+$state=[ordered]@{ExpectedVersion=$ExpectedVersion;ExpectedRelease=$ExpectedRelease;Source=$null;ArchiveValidated=$false;Path=$null;ProductVersion=$null;Installer=$null;InstallerSha256=$null;ExpectedInstallerSha256=$ExpectedInstallerSha256;InstallerVersion=$null;SignatureStatus=$null;Signer=$null;InstallerExitCode=$null;InstallerTimeoutSeconds=$installerTimeoutSeconds;Error=$null}
 try {
   if($ExpectedVersion -ne '2.156.951.0' -or $ExpectedRelease -ne '26.07'){throw "Verifier is pinned to July 2026 / 26.07 / 2.156.951.0; received version=$ExpectedVersion release=$ExpectedRelease."}
   $desktop=@(Get-DesktopCandidates)|Where-Object ProductVersion -eq $ExpectedVersion|Select-Object -First 1
@@ -46,8 +60,30 @@ try {
   if($iv -ne $ExpectedVersion){throw "Downloaded installer ProductVersion=$iv; expected $ExpectedVersion."}
   Write-Host "DESKTOP-INSTALLER-VERSION-GATE|PASS|ProductVersion=$iv"
 
-  $p=Start-Process -FilePath $installer -ArgumentList '/quiet','/norestart','ACCEPT_EULA=1',"/log=$log" -PassThru -Wait -NoNewWindow
-  $state.InstallerExitCode=$p.ExitCode
+  $p=Start-Process -FilePath $installer -ArgumentList '/quiet','/norestart','ACCEPT_EULA=1',"/log=$log" -PassThru -NoNewWindow
+  Write-Host "DESKTOP-INSTALL-GATE|START|TimeoutSeconds=$installerTimeoutSeconds|PID=$($p.Id)"
+  $stopwatch=[Diagnostics.Stopwatch]::StartNew()
+  while(-not $p.HasExited -and $stopwatch.Elapsed.TotalSeconds -lt $installerTimeoutSeconds){
+    Start-Sleep -Seconds 5
+    $elapsed=[int]$stopwatch.Elapsed.TotalSeconds
+    if(($elapsed % 30) -eq 0){Write-Host "DESKTOP-INSTALL-GATE|POLL|PID=$($p.Id)|ElapsedSeconds=$elapsed|TimeoutSeconds=$installerTimeoutSeconds"}
+    $p.Refresh()
+  }
+  $stopwatch.Stop()
+
+  if(-not $p.HasExited){
+    $snapshot=@(Get-InstallerProcessSnapshot)
+    $snapshot|ConvertTo-Json -Depth 5|Set-Content $processDiag -Encoding utf8
+    if(Test-Path $log -PathType Leaf){Copy-Item $log (Join-Path $DiagnosticsRoot 'desktop-install-timeout.log') -Force}
+    Write-Host "DESKTOP-INSTALL-GATE|TIMEOUT|PID=$($p.Id)|ElapsedSeconds=$([int]$stopwatch.Elapsed.TotalSeconds)|TimeoutSeconds=$installerTimeoutSeconds|Log=$log|ProcessDiagnostics=$processDiag"
+    try{Stop-Process -Id $p.Id -Force -ErrorAction Stop;Write-Host "DESKTOP-INSTALL-GATE|TERMINATED|PID=$($p.Id)"}catch{Write-Host "DESKTOP-INSTALL-GATE|TERMINATE-WARN|PID=$($p.Id)|Error=$($_.Exception.Message)"}
+    $state.Error="Power BI Desktop installer timed out after $installerTimeoutSeconds seconds. Diagnostics: $log; $processDiag"
+    Save-Diagnostic ([pscustomobject]$state)
+    throw $state.Error
+  }
+
+  $p.Refresh();$state.InstallerExitCode=$p.ExitCode
+  Write-Host "DESKTOP-INSTALL-GATE|EXIT|ExitCode=$($p.ExitCode)|ElapsedSeconds=$([int]$stopwatch.Elapsed.TotalSeconds)"
   if($p.ExitCode -notin @(0,3010,1641)){throw "Installer exit code $($p.ExitCode)."}
   Write-Host "DESKTOP-INSTALL-GATE|PASS|ExitCode=$($p.ExitCode)"
 
