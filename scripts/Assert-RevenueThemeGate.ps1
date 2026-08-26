@@ -75,9 +75,11 @@ if ($bindingMeasures -notcontains 'NavigationHtmlButtons') {
 }
 
 # Locate the generated semantic-model measure referenced by the actual binding.
+# TMDL permits measure names to be quoted or unquoted; the generator emits quoted
+# names, so accept both forms without weakening the measure-bound validation.
 $measureFiles = @(Get-ChildItem $GeneratedRoot -Recurse -Filter '*.tmdl' -File | Where-Object { $_.FullName -match 'SemanticModel' })
 $measureText = ($measureFiles | ForEach-Object { Get-Content $_.FullName -Raw }) -join "`n"
-$measureMatch = [regex]::Match($measureText, '(?ms)^\s*measure\s+NavigationHtmlButtons\s*=\s*(.*?)(?=^\s*measure\s+|^\s*partition\s+|\z)')
+$measureMatch = [regex]::Match($measureText, "(?ms)^\s*measure\s+'?NavigationHtmlButtons'?\s*=\s*(.*?)(?=^\s*measure\s+'?|^\s*partition\s+|\z)")
 if (-not $measureMatch.Success) { throw "CUSTOM-NAVIGATION-GATE failed: generated semantic model does not contain measure NavigationHtmlButtons." }
 $navigationDax = $measureMatch.Groups[1].Value
 
