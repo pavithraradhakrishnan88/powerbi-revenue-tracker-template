@@ -23,7 +23,7 @@ table Fact_Revenue
 		dataType: string
 		lineageTag = fact-revenue-col-productid
 		summarizeBy: none
-	sourceColumn: ProductID
+		sourceColumn: ProductID
 
 		annotation SummarizationSetBy = Automatic
 
@@ -67,7 +67,7 @@ table Fact_Revenue
 		dataType: int64
 		lineageTag = fact-revenue-col-isrefund
 		summarizeBy: sum
-	sourceColumn: IsRefund
+		sourceColumn: IsRefund
 
 		annotation SummarizationSetBy = Automatic
 
